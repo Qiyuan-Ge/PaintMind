@@ -202,7 +202,7 @@ class PaintMind(nn.Module):
         pred = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
         loss = self.forward_loss(img, pred, mask)
 
-        return loss, pred  
+        return loss, pred, mask 
 
 def create_model(image_size=224, patch_size=16):
     model = PaintMind(image_size=image_size, patch_size=patch_size, dim=768, d_ffn=1024, context_dim=768, in_channels=3, d_head=64, num_heads=12, depth=8, dropout=0.1)
