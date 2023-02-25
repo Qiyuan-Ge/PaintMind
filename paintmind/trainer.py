@@ -129,7 +129,7 @@ class PaintMindTrainer:
                         }
                     )
                 
-                self.scheduler.step()
+                self.scheduler.step(epoch)
         
         print("Train finished!")
         
