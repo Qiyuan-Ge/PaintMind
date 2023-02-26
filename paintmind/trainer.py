@@ -74,7 +74,7 @@ class PaintMindTrainer:
                  dataloader,
                  num_epochs,
                  lr_min,
-                 warmup_epochs,
+                 warmup_steps,
                  warmup_lr_init,
                  ema_decay=0.9999,
                  max_grad_norm=1.0, 
@@ -91,7 +91,7 @@ class PaintMindTrainer:
         self.model = model
         self.num_epoch = num_epochs
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
-        self.scheduler = CosineLRScheduler(self.optimizer, t_initial=num_epochs, lr_min=lr_min, warmup_t=warmup_epochs, warmup_lr_init=warmup_lr_init)
+        self.scheduler = CosineLRScheduler(self.optimizer, t_initial=num_epochs*len(dataloader), lr_min=lr_min, warmup_t=warmup_steps, warmup_lr_init=warmup_lr_init)
         
         self.model, self.optimizer, self.dataloader, self.scheduler = self.accelerator.prepare(self.model, self.optimizer, dataloader, self.scheduler)
         
@@ -148,6 +148,8 @@ class PaintMindTrainer:
                         self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                         
                     self.optimizer.step()
+                    self.steps += 1
+                    self.scheduler.step(self.steps)
                     
                     self._ema_update(self.model)
                     
@@ -164,9 +166,6 @@ class PaintMindTrainer:
                     )
                     if self.steps % self.sample_interval == 0:
                         self.sample(imgs, pred, mask)
-                    self.steps += 1
                 
-                self.scheduler.step(epoch)
-        
         print("Train finished!")
         
