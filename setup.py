@@ -21,5 +21,6 @@ setup(
         'accelerate',
         'tqdm',
         'pycocotools',
+        'omegaconf',
     ],
 )
