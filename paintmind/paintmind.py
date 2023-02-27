@@ -235,8 +235,8 @@ class MaskedLatentModel(nn.Module):
 
         return loss, xrec
 
-def create_model():
-    model = MaskedLatentModel(image_size=64, patch_size=8, dim=512, d_ffn=2048, context_dim=768, in_channels=3, d_head=64, num_heads=8, depth=8, dropout=0.1)
+def create_model(image_size=64, patch_size=8, dim=512, d_ffn=2048, in_channels=3, d_head=64, num_heads=8, depth=4, dropout=0.1):
+    model = MaskedLatentModel(image_size=image_size, patch_size=patch_size, dim=dim, d_ffn=d_ffn, context_dim=768, in_channels=in_channels, d_head=d_head, num_heads=num_heads, depth=depth, dropout=dropout)
     
     return model
         
