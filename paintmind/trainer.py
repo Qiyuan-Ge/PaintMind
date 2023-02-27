@@ -99,9 +99,10 @@ class PaintMindTrainer:
                  save_every_n_step=1000,
                  vqgan_config_path=None,
                  vqgan_pretrained_path=None,
+                 gradient_accumulation_steps=8,
                  ):
         
-        self.accelerator = Accelerator()
+        self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
         self.device = self.accelerator.device
         
         self.use_ema = False
@@ -180,21 +181,21 @@ class PaintMindTrainer:
             log = Log()
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
                 for batch in tqdm_dataloader:
-                    self.optimizer.zero_grad()
+                    with accelerator.accumulate(model):
+                        imgs, token_ids, text_mask = batch #text is token ids
+                        latent = self.vqae_encode(imgs)
+                        text_emb = self.text_encode(token_ids)
+                        loss, pred = self.model(latent, text_emb, text_mask, mask_ratio=np.random.choice(self.mask_p))
                     
-                    imgs, token_ids, text_mask = batch #text is token ids
-                    latent = self.vqae_encode(imgs)
-                    text_emb = self.text_encode(token_ids)
-                    loss, pred = self.model(latent, text_emb, text_mask, mask_ratio=np.random.choice(self.mask_p))
+                        self.accelerator.backward(loss)
                     
-                    self.accelerator.backward(loss)
-                    
-                    if exists(self.max_grad_norm):  
-                        self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                        if exists(self.max_grad_norm):  
+                            self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                         
-                    self.optimizer.step()
-                    self.steps += 1
-                    self.scheduler.step(self.steps)
+                        self.optimizer.step()
+                        self.steps += 1
+                        self.scheduler.step(self.steps)
+                        self.optimizer.zero_grad()
                     
                     if self.use_ema:
                         self._ema_update()
