@@ -6,10 +6,10 @@ from tqdm.auto import tqdm
 from accelerate import Accelerator
 from torchvision.utils import save_image
 from timm.scheduler.cosine_lr import CosineLRScheduler
-#from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 from paintmind import taming
 from paintmind.text_encoder.clip import CLIP, DEFAULT_CLIP_NAME
+#from paintmind.text_encoder.t5 import T5, DEFAULT_T5_NAME
 
 
 def exists(x):
@@ -90,20 +90,24 @@ class PaintMindTrainer:
                  lr_min,
                  warmup_steps,
                  warmup_lr_init,
-                 ema_decay=0.999,
+                 ema_decay=None,
                  max_grad_norm=1.0, 
-                 clip_name=DEFAULT_CLIP_NAME, 
+                 text_model_name=DEFAULT_CLIP_NAME, 
                  text_max_length=77,
                  checkpoint_path=None,
-                 sample_interval=None,
-                 vqf4_config_path=None,
-                 vqf4_pretrained_path=None,
+                 sample_interval=1000,
+                 save_every_n_step=1000,
+                 vqgan_config_path=None,
+                 vqgan_pretrained_path=None,
                  ):
         
         self.accelerator = Accelerator()
         self.device = self.accelerator.device
         
-        self.ema = EMA(model, ema_decay)
+        self.use_ema = False
+        if exists(ema_decay):
+            self.use_ema = True
+            self.ema = EMA(model, ema_decay)
         
         self.model = model
         self.num_epoch = num_epochs
@@ -113,11 +117,12 @@ class PaintMindTrainer:
         
         self.max_grad_norm = max_grad_norm
         
-        self.clip = CLIP(clip_name, text_max_length, device=self.device)
-        self.vqae = taming.load_vqgan(vqf4_config_path, vqf4_pretrained_path).to(self.device)
+        self.text = CLIP(text_model_name, text_max_length, device=self.device)
+        self.vqae = taming.load_vqgan(vqgan_config_path, vqgan_pretrained_path).to(self.device)
         
         self.mask_p = linear_masked_p_schedule()
         self.sample_interval = sample_interval
+        self.save_every_n_step = save_every_n_step
         
         self.checkpoint_path = checkpoint_path
         os.makedirs(self.checkpoint_path, exist_ok=True)
@@ -125,9 +130,14 @@ class PaintMindTrainer:
         self.sample_dir = os.path.join(checkpoint_path, 'sample')
         os.makedirs(self.sample_dir, exist_ok=True)
          
-    def _ema_update(self, model):
+    def save(self):
         self.accelerator.wait_for_everyone()
-        unwrapped_model = self.accelerator.unwrap_model(model)
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        self.accelerator.save(unwrapped_model.state_dict(), os.path.join(self.checkpoint_path, f'model_step_{self.steps}.pt'))
+    
+    def _ema_update(self):
+        self.accelerator.wait_for_everyone()
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
         self.ema.update(unwrapped_model)
         self.accelerator.save(self.ema.model.state_dict(), os.path.join(self.checkpoint_path, 'model_ema.pt'))
         
@@ -144,8 +154,8 @@ class PaintMindTrainer:
         return imgs
     
     @torch.no_grad()
-    def clip_encode(self, token_ids):
-        text_emb = self.clip.encode_tokens(token_ids)
+    def text_encode(self, token_ids):
+        text_emb = self.text.encode_tokens(token_ids)
         
         return text_emb
            
@@ -174,9 +184,8 @@ class PaintMindTrainer:
                     
                     imgs, token_ids, text_mask = batch #text is token ids
                     latent = self.vqae_encode(imgs)
-                    text_emb = self.clip_encode(token_ids)
-                    np.random.choice(self.mask_p)
-                    loss, pred = self.model(latent, text_emb, text_mask, mask_ratio=0.75)
+                    text_emb = self.text_encode(token_ids)
+                    loss, pred = self.model(latent, text_emb, text_mask, mask_ratio=np.random.choice(self.mask_p))
                     
                     self.accelerator.backward(loss)
                     
@@ -187,7 +196,8 @@ class PaintMindTrainer:
                     self.steps += 1
                     self.scheduler.step(self.steps)
                     
-                    self._ema_update(self.model)
+                    if self.use_ema:
+                        self._ema_update()
                     
                     bs = imgs.shape[0]
                     log.add({'total_loss':loss.item()*bs, 'n_sample':bs})
@@ -200,6 +210,10 @@ class PaintMindTrainer:
                             "LR"         : log['lr'],
                         }
                     )
+                    
+                    if self.steps % self.save_every_n_step == 0:
+                        self.save()
+                        
                     if self.steps % self.sample_interval == 0:
                         self.sample(imgs, pred)
                 

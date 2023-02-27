@@ -2,6 +2,7 @@ import torch
 from functools import partial
 from torch.utils.data import DataLoader
 from paintmind.text_encoder.clip import tokenize, DEFAULT_CLIP_NAME
+#from paintmind.text_encoder.t5 import tokenize, DEFAULT_T5_NAME
 
     
 class collate_fn:

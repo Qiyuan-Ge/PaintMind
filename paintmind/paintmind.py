@@ -3,10 +3,12 @@ sys.path.append('../paintmind')
 
 import math
 import torch
+import numpy as np
 import torch.nn as nn
 from einops import rearrange
 from inspect import isfunction
 from timm.models.vision_transformer import PatchEmbed
+from .util.pos_embed import get_2d_sincos_pos_embed
 
 
 def exists(x):
@@ -127,6 +129,35 @@ class MaskedLatentModel(nn.Module):
         
         self.decoder = nn.Linear(dim, patch_size*patch_size*in_channels, bias=True)
         
+        self.initialize_weights()
+        
+    def initialize_weights(self):
+        # https://github.com/facebookresearch/mae/blob/main/models_mae.py
+        # initialization
+        # initialize pos_embed by sin-cos embedding
+        pos_embed = get_2d_sincos_pos_embed(self.posi_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=False)
+        self.posi_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+        # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
+        w = self.patch_embed.proj.weight.data
+        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+
+        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
+        torch.nn.init.normal_(self.mask_token, std=.02)
+
+        # initialize nn.Linear and nn.LayerNorm
+        self.apply(self._init_weights)
+        
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            # we use xavier_uniform following official JAX ViT:
+            torch.nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+            
     def random_masking(self, x, mask_ratio):
         """
         Perform per-sample random masking by per-sample shuffling.
@@ -205,7 +236,7 @@ class MaskedLatentModel(nn.Module):
         return loss, xrec
 
 def create_model():
-    model = MaskedLatentModel(image_size=64, patch_size=8, dim=512, d_ffn=2048, context_dim=768, in_channels=3, d_head=64, num_heads=8, depth=10, dropout=0.1)
+    model = MaskedLatentModel(image_size=64, patch_size=8, dim=512, d_ffn=2048, context_dim=768, in_channels=3, d_head=64, num_heads=8, depth=8, dropout=0.1)
     
     return model
         

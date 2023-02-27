@@ -53,8 +53,8 @@ def encode_text(texts: List[str], name=DEFAULT_CLIP_NAME):
 
 class CLIP:
     def __init__(self, name=DEFAULT_CLIP_NAME, max_length=MAX_LENGTH, device='cuda'):
-        self.tokenizer = CLIPTokenizer.from_pretrained(name)
-        self.clip_text = CLIPTextModel.from_pretrained(name).to(device)
+        self.tokenizer = get_tokenizer(name)
+        self.clip_text = get_model(name).to(device)
         self.clip_text.eval()
         self.max_length = max_length
         self.device = device
