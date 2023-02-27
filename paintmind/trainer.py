@@ -181,7 +181,7 @@ class PaintMindTrainer:
             log = Log()
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
                 for batch in tqdm_dataloader:
-                    with accelerator.accumulate(self.model):
+                    with self.accelerator.accumulate(self.model):
                         imgs, token_ids, text_mask = batch #text is token ids
                         latent = self.vqae_encode(imgs)
                         text_emb = self.text_encode(token_ids)
