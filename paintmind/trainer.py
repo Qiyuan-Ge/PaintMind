@@ -29,8 +29,8 @@ def transform_reverse(x):
     
     return x
 
-def linear_masked_p_schedule(timesteps=100):
-    p_min = 0.02
+def linear_masked_p_schedule(timesteps=75):
+    p_min = 0.25
     p_max = 1.00
     
     return np.linspace(p_min, p_max, timesteps)
