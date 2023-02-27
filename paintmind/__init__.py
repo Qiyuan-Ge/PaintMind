@@ -1,5 +1,6 @@
 from paintmind.version import __version__
 
+from . import taming
 from . import datasets
 from .trainer import PaintMindTrainer
 from .paintmind import create_model

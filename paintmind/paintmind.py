@@ -109,15 +109,13 @@ class Transformer(nn.Module):
         return x
 
            
-class PaintMind(nn.Module):
+class MaskedLatentModel(nn.Module):
     def __init__(self, image_size, patch_size, dim, d_ffn, context_dim=None, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1):
         super().__init__()
-        image_h, image_w = pair(image_size)
-        patch_h, patch_w = pair(patch_size)
         
-        assert image_h % patch_h == 0 and image_w % patch_w == 0, 'Image dimensions must be divisible by the patch size.'
+        assert image_size % patch_size == 0, 'Image dimensions must be divisible by the patch size.'
         
-        num_patches = (image_h // patch_h) * (image_w // patch_w)
+        num_patches = (image_size // patch_size) ** 2
         
         self.patch_embed = PatchEmbed(image_size, patch_size, in_channels, dim)
         
@@ -126,6 +124,8 @@ class PaintMind(nn.Module):
         self.posi_embed = nn.Parameter(torch.randn(1, num_patches, dim))
         
         self.vision_transformer = Transformer(dim, d_head, d_ffn, context_dim, num_heads, depth, dropout)
+        
+        self.decoder = nn.Linear(dim, patch_size*patch_size*in_channels, bias=True)
         
     def random_masking(self, x, mask_ratio):
         """
@@ -184,13 +184,11 @@ class PaintMind(nn.Module):
         
         return imgs
     
-    def forward_loss(self, imgs, pred, mask):
+    def forward_loss(self, imgs, pred):
         target = self.patchify(imgs)
         loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)
-        loss = (loss * mask).sum() / mask.sum()
         
-        return loss
+        return loss.mean()
     
     def forward(self, img, text_emb=None, text_mask=None, mask_ratio=0.75): #context (b, l) 
         x = self.patch_embed(img)
@@ -199,19 +197,21 @@ class PaintMind(nn.Module):
         x = torch.cat([x[:, :, :], mask_tokens], dim=1)
         x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
         x = x + self.posi_embed
-        pred = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
-        loss = self.forward_loss(img, pred, mask)
+        x = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
+        xrec = self.decoder(x)
+        
+        loss = self.forward_loss(img, xrec)
 
-        return loss, pred, mask 
+        return loss, xrec
 
-def create_model(image_size=224, patch_size=16):
-    model = PaintMind(image_size=image_size, patch_size=patch_size, dim=768, d_ffn=1024, context_dim=768, in_channels=3, d_head=64, num_heads=12, depth=8, dropout=0.1)
+def create_model():
+    model = MaskedLatentModel(image_size=64, patch_size=8, dim=512, d_ffn=2048, context_dim=768, in_channels=3, d_head=64, num_heads=8, depth=10, dropout=0.1)
     
     return model
         
     
-# model = PaintMind(image_size=224, patch_size=16, dim=768, d_ffn=3072, context_dim=768, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1)
-# image = torch.randn(2, 3, 224, 224)
+# model = create_model()
+# image = torch.randn(2, 3, 64, 64)
 # text_emb = torch.randn(2, 6, 768)
 # text_mask = torch.tensor([[1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 0, 0]]).bool()
 # loss, pred = model(image, text_emb, text_mask)
