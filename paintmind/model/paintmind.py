@@ -211,9 +211,11 @@ class MaskedLatentModel(nn.Module):
         
         return imgs
     
-    def forward_loss(self, imgs, pred):
+    def forward_loss(self, imgs, pred, mask):
         target = self.patchify(imgs)
         loss = (pred - target) ** 2
+        loss = loss.mean(dim=-1)
+        loss = (loss * mask).sum() / mask.sum()
         
         return loss.mean()
     
@@ -227,7 +229,7 @@ class MaskedLatentModel(nn.Module):
         x = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
         xrec = self.decoder(x)
         
-        loss = self.forward_loss(img, xrec)
+        loss = self.forward_loss(img, xrec, mask)
 
         return loss, xrec
 
