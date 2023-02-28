@@ -19,6 +19,41 @@ def default(val, d):
 
 def pair(t):
     return t if isinstance(t, tuple) else (t, t)
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, dim, d_head=64, num_heads=8, dropout=0.1):
+        super().__init__()
+        inner_dim = d_head * num_heads
+        self.num_heads = num_heads
+        self.scale = math.sqrt(d_head)
+        self.norm = nn.LayerNorm(dim)
+        self.to_q = nn.Linear(dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(dim, inner_dim, bias=False)
+        self.dropout = nn.Dropout(p=dropout)
+        self.proj = nn.Linear(inner_dim, dim, bias=False)
+        
+    def forward(self, x, mask=None):
+        x = self.norm(x)
+        
+        q = self.to_q(x)
+        k = self.to_k(x)
+        v = self.to_v(x)
+        q, k, v = [rearrange(x, 'b n (h d) -> b h n d', h=self.num_heads) for x in (q, k, v)]
+        sim = torch.einsum('b h i d, b h j d -> b h i j', q, k) / self.scale
+        
+        if exists(mask):
+            mask = rearrange(mask, 'b j -> b 1 1 j')
+            max_neg_value = -torch.finfo(sim.dtype).max
+            sim = sim.masked_fill(~mask, max_neg_value)
+            
+        attn_p = sim.softmax(dim=-1)
+        attn_p = self.dropout(attn_p)
+        out = torch.einsum('b h i j, b h j d -> b h i d', attn_p, v)
+        out = rearrange(out, 'b h n d -> b n (h d)')
+
+        return self.proj(out)
     
 
 class CrossAttention(nn.Module):
@@ -28,6 +63,8 @@ class CrossAttention(nn.Module):
         context_dim = default(context_dim, dim)
         self.num_heads = num_heads
         self.scale = math.sqrt(d_head)
+        self.norm = nn.LayerNorm(dim)
+        self.norm_context = nn.LayerNorm(context_dim)
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
         self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
@@ -36,15 +73,22 @@ class CrossAttention(nn.Module):
         
     def forward(self, x, context=None, mask=None):
         context = default(context, x)
+        
+        x = self.norm(x)
+        context = self.norm_context(context)
+        
         q = self.to_q(x)
         k = self.to_k(context)
         v = self.to_v(context)
+        
         q, k, v = [rearrange(x, 'b n (h d) -> b h n d', h=self.num_heads) for x in (q, k, v)]
         sim = torch.einsum('b h i d, b h j d -> b h i j', q, k) / self.scale
+        
         if exists(mask):
             mask = rearrange(mask, 'b j -> b 1 1 j')
             max_neg_value = -torch.finfo(sim.dtype).max
             sim = sim.masked_fill(~mask, max_neg_value)
+            
         attn_p = sim.softmax(dim=-1)
         attn_p = self.dropout(attn_p)
         out = torch.einsum('b h i j, b h j d -> b h i d', attn_p, v)
@@ -74,21 +118,22 @@ class TransformerBlock(nn.Module):
     def __init__(self, dim, d_head, d_ffn, context_dim=None, num_heads=8, dropout=0.1):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
-        self.attn1 = CrossAttention(dim, d_head, num_heads, dropout)
+        self.attn1 = SelfAttention(dim, d_head, num_heads, dropout)
+        
         if exists(context_dim):
             self.norm2 = nn.LayerNorm(dim)
-            self.norm3 = nn.LayerNorm(context_dim)
             self.attn2 = CrossAttention(dim, d_head, num_heads, dropout, context_dim)
-        self.norm4 = nn.LayerNorm(dim)
+            
+        self.norm3 = nn.LayerNorm(dim)
         self.ffn = PositionwiseFeedForward(dim, d_ffn, dropout)
         
     def forward(self, x, text_emb=None, text_mask=None):
-        x = self.attn1(self.norm1(x)) + x
+        x = self.norm1(self.attn1(x) + x)
         
         if exists(text_emb):
-            x = self.attn2(self.norm2(x), self.norm3(text_emb), text_mask) + x
+            x = self.norm2(self.attn2(x, text_emb, text_mask) + x)
             
-        x = self.ffn(self.norm4(x)) + x
+        x = self.norm3(self.ffn(x) + x)
 
         return x
 
