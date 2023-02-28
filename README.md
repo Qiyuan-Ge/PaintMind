@@ -1,1 +1,1 @@
-# PaintDream
+# PaintMind
