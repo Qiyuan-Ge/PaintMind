@@ -1,12 +1,15 @@
 import os
+import torch
 import zipfile
 import numpy as np
 from PIL import Image
 from pycocotools.coco import COCO
-import torch
-import torchvision.datasets as datasets
 
-__all__ = ['CelebA', 'coco']
+
+def load_dataset(name='coco', root=None, transform=None):
+    if name == 'coco':
+        return coco(root, transform=transform)
+
 
 def unzip_file(zip_src, tgt_dir):
     if zipfile.is_zipfile(zip_src):
