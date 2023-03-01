@@ -239,6 +239,7 @@ class PaintMindTrainer:
                         
                     if self.steps % self.sample_interval == 0:
                         self.sample(images, pred)
-                
+        
+        self.accelerator.end_training()        
         print("Train finished!")
         
