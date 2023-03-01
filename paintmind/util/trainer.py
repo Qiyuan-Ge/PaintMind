@@ -108,10 +108,11 @@ class PaintMindTrainer:
                  save_every_n_step=1000,
                  first_stage_config_path=None,
                  first_stage_pretrained_path=None,
-                 gradient_accumulation_steps=8,
+                 gradient_accumulation_steps=4,
+                 mixed_precision='no',
                  ):
         
-        self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps)
+        self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, mixed_precision=mixed_precision)
         self.device = self.accelerator.device
         
         self.use_ema = False
@@ -192,15 +193,16 @@ class PaintMindTrainer:
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
                 for batch in tqdm_dataloader:
                     with self.accelerator.accumulate(self.model):
-                        imgs, token_ids, text_mask = batch #text is token ids
-                        latent = self.vqae_encode(imgs)
-                        text_emb = self.text_encode(token_ids)
+                        images, tokens, text_mask = batch #text is token ids
                         
-                        loss, pred = self.model(latent, text_emb, text_mask, mask_ratio=np.random.choice(self.mask_p))
+                        with self.accelerator.autocast():
+                            z = self.vqae_encode(images)
+                            e = self.text_encode(tokens)
+                            loss, pred = self.model(z, e, text_mask, mask_ratio=np.random.choice(self.mask_p))
                     
                         self.accelerator.backward(loss)
-                    
-                        if exists(self.max_grad_norm):  
+                        
+                        if self.accelerator.sync_gradients:
                             self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                         
                         self.optimizer.step()
@@ -211,7 +213,7 @@ class PaintMindTrainer:
                     if self.use_ema:
                         self._ema_update()
                     
-                    bs = imgs.shape[0]
+                    bs = images.shape[0]
                     log.add({'total_loss':loss.item()*bs, 'n_sample':bs})
                     log.update({'loss':loss.item(), 'lr':self.optimizer.param_groups[0]['lr']})
                     tqdm_dataloader.set_postfix(
@@ -227,7 +229,7 @@ class PaintMindTrainer:
                         self.save()
                         
                     if self.steps % self.sample_interval == 0:
-                        self.sample(imgs, pred)
+                        self.sample(images, pred)
                 
         print("Train finished!")
         
