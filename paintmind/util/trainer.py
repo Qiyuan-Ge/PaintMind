@@ -110,10 +110,16 @@ class PaintMindTrainer:
                  first_stage_pretrained_path=None,
                  gradient_accumulation_steps=4,
                  mixed_precision='no',
+                 log_dir="./log"
                  ):
         
-        self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, mixed_precision=mixed_precision)
+        self.accelerator = Accelerator(gradient_accumulation_steps=gradient_accumulation_steps, 
+                                       mixed_precision=mixed_precision,
+                                       log_with="tensorboard",
+                                       logging_dir=log_dir,
+                           )
         self.device = self.accelerator.device
+        os.makedirs(log_dir, exist_ok=True)
         
         self.use_ema = False
         if exists(ema_decay):
@@ -188,6 +194,7 @@ class PaintMindTrainer:
     
     def train(self):
         self.steps = 0
+        self.accelerator.init_trackers("my_project")
         for epoch in range(self.num_epoch):
             log = Log()
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
@@ -216,6 +223,7 @@ class PaintMindTrainer:
                     bs = images.shape[0]
                     log.add({'total_loss':loss.item()*bs, 'n_sample':bs})
                     log.update({'loss':loss.item(), 'lr':self.optimizer.param_groups[0]['lr']})
+   
                     tqdm_dataloader.set_postfix(
                         ordered_dict={
                             "Epoch"      : epoch,
@@ -224,6 +232,7 @@ class PaintMindTrainer:
                             "LR"         : log['lr'],
                         }
                     )
+                    self.accelerator.log({"loss": log['total_loss']/log['n_sample'], "lr": log['lr']}, step=self.steps)
                     
                     if self.steps % self.save_every_n_step == 0:
                         self.save()
