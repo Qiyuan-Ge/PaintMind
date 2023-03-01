@@ -17,10 +17,12 @@ setup(
         'pillow',
         'torch>=1.6',
         'torchvision',
+        'timm',
         'transformers',
         'accelerate',
         'tqdm',
         'pycocotools',
         'omegaconf',
+        'pytorch_lightning',
     ],
 )
