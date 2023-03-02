@@ -152,7 +152,7 @@ class Transformer(nn.Module):
         return x
 
            
-class MaskedLatentModel(nn.Module):
+class MaskedViT(nn.Module):
     def __init__(self, image_size, patch_size, dim, d_ffn, context_dim=None, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1):
         super().__init__()
         
