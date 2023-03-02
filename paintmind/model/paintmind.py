@@ -261,7 +261,7 @@ class MaskedLatentModel(nn.Module):
         target = self.patchify(imgs)
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)
-        loss = (loss * mask).sum() / mask.sum() + 0.5 * (loss * one_minus_mask).sum() / (one_minus_mask.sum() + 1e-12)
+        loss = (loss * mask).sum() / mask.sum() + (loss * one_minus_mask).sum() / (one_minus_mask.sum() + 1e-12)
         
         return loss
     
