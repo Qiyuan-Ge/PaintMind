@@ -212,6 +212,7 @@ class PaintMindTrainer:
                                 text_mask = None
                             else:
                                 embeds = self.text_encode(tokens)
+                                text_mask = text_mask.bool()
                                 
                             logits = self.model(quants, embeds, text_mask, mask_ratio=mask_ratio)
                             logits = rearrange(logits, 'b c h w -> b (h w) c')
