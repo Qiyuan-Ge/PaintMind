@@ -24,9 +24,12 @@ def get_tokenizer(name=DEFAULT_T5_NAME):
     
     return tokenizer
 
-def get_model(name=DEFAULT_T5_NAME):
-    model = T5EncoderModel.from_pretrained(name)
-    
+def get_model(name=DEFAULT_T5_NAME, mixed_precision='no'):
+    if mixed_precision == 'fp16':
+        model = T5EncoderModel.from_pretrained(name, torch_dtype=torch.float16)
+    else:
+        model = T5EncoderModel.from_pretrained(name)
+        
     return model
 
 def tokenize(text: List[str], name=DEFAULT_T5_NAME):
@@ -55,9 +58,9 @@ def encode_text(texts: List[str], name=DEFAULT_T5_NAME):
     return encoded_text, attn_mask
 
 class T5:
-    def __init__(self, name=DEFAULT_T5_NAME, max_length=MAX_LENGTH, device='cuda'):
+    def __init__(self, name=DEFAULT_T5_NAME, max_length=MAX_LENGTH, device='cuda', mixed_precision='no'):
         self.tokenizer = get_tokenizer(name)
-        self.t5 = get_model(name).to(device)
+        self.t5 = get_model(name, mixed_precision).to(device)
         self.t5.eval()
         self.max_length = max_length
         self.device = device
@@ -86,5 +89,3 @@ class T5:
         
         return encoded_text, attn_mask 
         
-    
-    

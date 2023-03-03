@@ -1,27 +1,22 @@
 import os
 import torch
 import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
 from copy import deepcopy
 from tqdm.auto import tqdm
+from einops import rearrange
 from omegaconf import OmegaConf
 from accelerate import Accelerator
 from torchvision.utils import save_image
 from timm.scheduler.cosine_lr import CosineLRScheduler
-from paintmind.ldm.models.autoencoder import AutoencoderKL
-from paintmind.text_encoder.clip import CLIP, DEFAULT_CLIP_NAME
-#from paintmind.text_encoder.t5 import T5, DEFAULT_T5_NAME
+from paintmind.ldm.models.autoencoder import VQModel
+from paintmind.text_encoder.t5 import T5, DEFAULT_T5_NAME
 
 
 def exists(x):
     return x is not None
 
-# def transform_reverse(x, m=IMAGENET_DEFAULT_MEAN, s=IMAGENET_DEFAULT_STD):
-#     m = torch.tensor(m).to(x.device)
-#     s = torch.tensor(s).to(x.device)
-#     m = m.reshape(1, -1, 1, 1)
-#     s = s.reshape(1, -1, 1, 1)
-    
-#     return x * s + m
 
 def transform_reverse(x):
     x = torch.clamp(x, -1., 1.)
@@ -31,7 +26,7 @@ def transform_reverse(x):
 
 def load_first_stage(config_path, ckpt_path=None):
     config = OmegaConf.load(config_path)
-    model = AutoencoderKL(**config.model.params)
+    model = VQModel(**config.model.params)
     if ckpt_path is not None:
         sd = torch.load(ckpt_path, map_location="cpu")["state_dict"]
     missing, unexpected = model.load_state_dict(sd, strict=False)
@@ -101,8 +96,8 @@ class PaintMindTrainer:
                  warmup_lr_init,
                  ema_decay=None,
                  max_grad_norm=1.0, 
-                 text_model_name=DEFAULT_CLIP_NAME, 
-                 text_max_length=77,
+                 text_model_name=DEFAULT_T5_NAME, 
+                 text_max_length=256,
                  checkpoint_path=None,
                  sample_interval=1000,
                  save_every_n_step=1000,
@@ -134,10 +129,10 @@ class PaintMindTrainer:
         
         self.max_grad_norm = max_grad_norm
         
-        self.text = CLIP(text_model_name, text_max_length, device=self.device)
+        self.text = T5(text_model_name, text_max_length, device=self.device, mixed_precision=mixed_precision)
         self.first_stage = load_first_stage(first_stage_config_path, first_stage_pretrained_path).to(self.device)
         
-        self.mask_p = linear_masked_p_schedule()
+        self.mask_ratio = linear_masked_p_schedule()
         self.sample_interval = sample_interval
         self.save_every_n_step = save_every_n_step
         
@@ -146,6 +141,8 @@ class PaintMindTrainer:
         
         self.sample_dir = os.path.join(checkpoint_path, 'sample')
         os.makedirs(self.sample_dir, exist_ok=True)
+        
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
          
     def save(self):
         self.accelerator.wait_for_everyone()
@@ -160,14 +157,13 @@ class PaintMindTrainer:
         
     @torch.no_grad()
     def vqae_encode(self, imgs):
-        posterior = self.first_stage.encode(imgs)
-        z = posterior.sample()
+        quant, diff, (_,_,ind) = self.first_stage.encode(imgs)
         
-        return z
+        return quant, ind
     
     @torch.no_grad()
-    def vqae_decode(self, latent):
-        imgs = self.first_stage.decode(latent)
+    def vqae_decode(self, quant):
+        imgs = self.first_stage.decode(quant)
         
         return imgs
     
@@ -177,20 +173,24 @@ class PaintMindTrainer:
         
         return text_emb
            
-    def sample(self, imgs, pred, n=4):
-        unwrap_model = self.accelerator.unwrap_model(self.model)
+    def sample(self, images, scores, n, h, w, c):
         
-        imgs = imgs[:n]
-        pred = pred[:n]
+        images = images[:n]
+        scores = scores[:n]
         
-        pred = unwrap_model.unpatchify(pred)
-        pred = self.vqae_decode(pred)
+        indice = scores.argmax(dim=-1)
         
-        gen_images = torch.cat([imgs, pred], dim=0)
+        quants = self.first_stage.quantize.get_codebook_entry(indice, shape=(n, h, w, c))
+        imgrec = self.vqae_decode(quants)
         
         image_path = os.path.join(self.sample_dir, f"sample-{self.steps}.png")
         
-        save_image(transform_reverse(gen_images), image_path, nrow=n)
+        save_image(transform_reverse(torch.cat([images, imgrec], dim=0)), image_path, nrow=n)
+        
+    def loss_func(self, x, label):
+        loss = F.cross_entropy(x, label)
+        
+        return loss
     
     def train(self):
         self.steps = 0
@@ -200,20 +200,32 @@ class PaintMindTrainer:
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
                 for batch in tqdm_dataloader:
                     with self.accelerator.accumulate(self.model):
-                        images, tokens, text_mask = batch #text is token ids
-                        
+                        images, tokens, text_mask = batch
+
                         with self.accelerator.autocast():
-                            z = self.vqae_encode(images)
-                            e = self.text_encode(tokens)
-                            loss, pred = self.model(z, e, text_mask, mask_ratio=np.random.choice(self.mask_p))
+                            quants, indice = self.vqae_encode(images)
+                            
+                            mask_ratio = np.random.choice(self.mask_ratio)
+                            free_guide = np.random.random()
+                            if mask_ratio > 0.25 and free_guide > 0.9:
+                                embeds = None
+                                text_mask = None
+                            else:
+                                embeds = self.text_encode(tokens)
+                                
+                            logits = self.model(quants, embeds, text_mask, mask_ratio=mask_ratio)
+                            logits = rearrange(logits, 'b c h w -> b (h w) c')
+                            logit_scale = self.logit_scale.exp()
+                            scores = logit_scale * torch.matmul(F.normalize(logits, dim=2), self.first_stage.quantize.embedding.weight.T)
+                            loss = self.loss_func(scores.reshape(-1, scores.shape[-1]), indice.reshape(-1))
                     
                         self.accelerator.backward(loss)
                         
                         if self.accelerator.sync_gradients:
                             self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                         
-                        self.optimizer.step()
                         self.steps += 1
+                        self.optimizer.step()
                         self.scheduler.step(self.steps)
                         self.optimizer.zero_grad()
                     
@@ -238,7 +250,8 @@ class PaintMindTrainer:
                         self.save()
                         
                     if self.steps % self.sample_interval == 0:
-                        self.sample(images, pred)
+                        _, c, h, w = quants.shape
+                        self.sample(images, scores, n=3, h=h, w=w, c=c)
         
         self.accelerator.end_training()        
         print("Train finished!")

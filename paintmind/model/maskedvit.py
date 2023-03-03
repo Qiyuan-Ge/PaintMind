@@ -4,7 +4,6 @@ import torch.nn as nn
 from einops import rearrange
 from inspect import isfunction
 from timm.models.vision_transformer import PatchEmbed
-from paintmind.util.pos_embed import get_2d_sincos_pos_embed
 
 
 def exists(x):
@@ -117,23 +116,21 @@ class PositionwiseFeedForward(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self, dim, d_head, d_ffn, context_dim=None, num_heads=8, dropout=0.1):
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim)
-        self.attn1 = SelfAttention(dim, d_head, num_heads, dropout)
+        # self.norm1 = nn.LayerNorm(dim)
+        # self.attn1 = SelfAttention(dim, d_head, num_heads, dropout)
         
-        if exists(context_dim):
-            self.norm2 = nn.LayerNorm(dim)
-            self.attn2 = CrossAttention(dim, d_head, num_heads, dropout, context_dim)
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn1 = CrossAttention(dim, d_head, num_heads, dropout, context_dim)
             
-        self.norm3 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
         self.ffn = PositionwiseFeedForward(dim, d_ffn, dropout)
         
     def forward(self, x, text_emb=None, text_mask=None):
-        x = self.norm1(self.attn1(x) + x)
+        # x = self.norm1(self.attn1(x) + x)
         
-        if exists(text_emb):
-            x = self.norm2(self.attn2(x, text_emb, text_mask) + x)
+        x = self.norm1(self.attn1(x, text_emb, text_mask) + x)
             
-        x = self.norm3(self.ffn(x) + x)
+        x = self.norm2(self.ffn(x) + x)
 
         return x
 
@@ -160,8 +157,8 @@ class MaskedViT(nn.Module):
         
         num_patches = (image_size // patch_size) ** 2
         
+        self.in_channels = in_channels
         self.patch_embed = PatchEmbed(image_size, patch_size, in_channels, dim)
-        
         self.mask_token = nn.Parameter(torch.zeros(1, 1, dim))
         
         self.posi_embed = nn.Parameter(torch.randn(1, num_patches, dim))
@@ -173,26 +170,20 @@ class MaskedViT(nn.Module):
         self.initialize_weights()
         
     def initialize_weights(self):
-        # https://github.com/facebookresearch/mae/blob/main/models_mae.py
-        # initialization
-        # initialize pos_embed by sin-cos embedding
-        pos_embed = get_2d_sincos_pos_embed(self.posi_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=False)
-        self.posi_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
-
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
         w = self.patch_embed.proj.weight.data
-        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        torch.nn.init.normal_(self.mask_token, std=.02)
+        nn.init.normal_(self.mask_token, std=.02)
 
         # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
-        
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             # we use xavier_uniform following official JAX ViT:
-            torch.nn.init.xavier_uniform_(m.weight)
+            nn.init.xavier_uniform_(m.weight)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -205,6 +196,7 @@ class MaskedViT(nn.Module):
         Per-sample shuffling is done by argsort random noise.
         x: [N, L, D], sequence
         """
+        
         N, L, D = x.shape  # batch, length, dim
         len_keep = int(L * (1 - mask_ratio))
         
@@ -228,42 +220,33 @@ class MaskedViT(nn.Module):
     
     def patchify(self, imgs):
         """
-        imgs: (N, 3, H, W)
-        x: (N, L, patch_size**2 *3)
+        imgs: (N, C, H, W)
+        x: (N, L, patch_size**2 *C)
         """
         p = self.patch_embed.patch_size[0]
         assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
         
         h = w = imgs.shape[2] // p
-        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
+        x = imgs.reshape(shape=(imgs.shape[0], self.in_channels, h, p, w, p))
         x = torch.einsum('nchpwq->nhwpqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
+        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * self.in_channels))
         
         return x
     
     def unpatchify(self, x):
         """
-        x: (N, L, patch_size**2 *3)
-        imgs: (N, 3, H, W)
+        x: (N, L, patch_size**2 *c)
+        imgs: (N, C, H, W)
         """
         p = self.patch_embed.patch_size[0]
         h = w = int(x.shape[1]**.5)
         assert h * w == x.shape[1]
         
-        x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, self.in_channels))
         x = torch.einsum('nhwpqc->nchpwq', x)
-        imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
+        imgs = x.reshape(shape=(x.shape[0], self.in_channels, h * p, h * p))
         
         return imgs
-    
-    def forward_loss(self, imgs, pred, mask):
-        one_minus_mask = 1 - mask
-        target = self.patchify(imgs)
-        loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)
-        loss = (loss * mask).sum() / mask.sum() + (loss * one_minus_mask).sum() / (one_minus_mask.sum() + 1e-12)
-        
-        return loss
     
     def forward(self, img, text_emb=None, text_mask=None, mask_ratio=0.75): #context (b, l) 
         x = self.patch_embed(img)
@@ -273,14 +256,13 @@ class MaskedViT(nn.Module):
         x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
         x = x + self.posi_embed
         x = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
-        xrec = self.decoder(x)
-        
-        loss = self.forward_loss(img, xrec, mask)
+        x = self.decoder(x)
+        xrec = self.unpatchify(x)
 
-        return loss, xrec
+        return xrec
 
-def create_model(image_size=64, patch_size=4, dim=512, d_ffn=2048, in_channels=3, d_head=64, num_heads=8, depth=6, dropout=0.1):
-    model = MaskedViT(image_size=image_size, patch_size=patch_size, dim=dim, d_ffn=d_ffn, context_dim=768, in_channels=in_channels, d_head=d_head, num_heads=num_heads, depth=depth, dropout=dropout)
+def create_model(image_size, patch_size, dim, d_ffn, context_dim=None, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1):
+    model = MaskedViT(image_size, patch_size, dim, d_ffn, context_dim, in_channels, d_head, num_heads, depth, dropout)
     
     return model
         
