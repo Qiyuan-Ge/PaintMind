@@ -159,7 +159,7 @@ class MaskedViT(nn.Module):
         
         self.in_channels = in_channels
         self.patch_embed = PatchEmbed(image_size, patch_size, in_channels, dim)
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, dim))
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
         
         self.posi_embed = nn.Parameter(torch.randn(1, num_patches, dim))
         
@@ -248,29 +248,37 @@ class MaskedViT(nn.Module):
         
         return imgs
     
-    def forward(self, img, text_emb=None, text_mask=None, mask_ratio=0.75): #context (b, l) 
-        x = self.patch_embed(img)
+    def forward(self, x, text_emb=None, text_mask=None, mask_ratio=0.75): #context (b, l) img (b c h w)
+        b, c, h, w = x.shape
+        x = rearrange(x, 'b c h w -> b (h w) c')
         x, mask, ids_restore = self.random_masking(x, mask_ratio)
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1]-x.shape[1], 1)
         x = torch.cat([x[:, :, :], mask_tokens], dim=1)
         x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
+        x = self.patch_embed(x)
         x = x + self.posi_embed
-        x = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
+        x = self.vision_transformer(x, text_emb, text_mask) #[N, L, p*p*3]
         x = self.decoder(x)
         xrec = self.unpatchify(x)
 
         return xrec
+    
+    # def forward(self, img, text_emb=None, text_mask=None, mask_ratio=0.75): #context (b, l) 
+    #     x = self.patch_embed(img)
+    #     x, mask, ids_restore = self.random_masking(x, mask_ratio)
+    #     mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1]-x.shape[1], 1)
+    #     x = torch.cat([x[:, :, :], mask_tokens], dim=1)
+    #     x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+    #     x = x + self.posi_embed
+    #     x = self.vision_transformer(x, text_emb, text_mask.bool()) #[N, L, p*p*3]
+    #     x = self.decoder(x)
+    #     xrec = self.unpatchify(x)
+
+    #     return xrec
 
 def create_model(image_size, patch_size, dim, d_ffn, context_dim=None, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1):
     model = MaskedViT(image_size, patch_size, dim, d_ffn, context_dim, in_channels, d_head, num_heads, depth, dropout)
     
     return model
         
-    
-# model = create_model()
-# image = torch.randn(2, 3, 64, 64)
-# text_emb = torch.randn(2, 6, 768)
-# text_mask = torch.tensor([[1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 0, 0]]).bool()
-# loss, pred = model(image, text_emb, text_mask)
-# print(loss)
-# print(pred.shape)
