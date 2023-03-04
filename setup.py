@@ -26,5 +26,6 @@ setup(
         'datasets',
         'sentencepiece',
         'pytorch_lightning',
+        'open_clip',
     ],
 )
