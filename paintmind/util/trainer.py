@@ -123,7 +123,7 @@ class PaintMindTrainer:
         
         self.model = model
         self.num_epoch = num_epochs
-        self.optimizer = Adafactor(self.model.parameters(), lr=lr, weight_decay=wd)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
         self.scheduler = CosineLRScheduler(self.optimizer, t_initial=num_epochs*len(dataloader), lr_min=lr_min, warmup_t=warmup_steps, warmup_lr_init=warmup_lr_init)
         self.model, self.optimizer, self.dataloader, self.scheduler = self.accelerator.prepare(self.model, self.optimizer, dataloader, self.scheduler)
         
