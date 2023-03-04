@@ -209,14 +209,15 @@ class PaintMindTrainer:
                             
                             mask_ratio = np.random.choice(self.mask_ratio)
                             free_guide = np.random.random()
+                            
                             if mask_ratio > 0.25 and free_guide > 0.9:
-                                embeds = None
+                                text_embs = None
                                 text_mask = None
                             else:
-                                embeds = self.text_encode(tokens)
+                                text_embs = self.text_encode(tokens)
                                 text_mask = text_mask.bool()
                                 
-                            logits = self.model(quants, embeds, text_mask, mask_ratio=mask_ratio)
+                            logits = self.model(quants, text_embs, text_mask, mask_ratio=mask_ratio)
                             logits = rearrange(logits, 'b c h w -> b (h w) c')
                             logits_scale = self.logit_scale.exp()
                             code_w = self.first_stage.quantize.embedding.weight.T.detach()
@@ -258,6 +259,7 @@ class PaintMindTrainer:
                         self.sample(images, scores, n=3, h=h, w=w, c=c)
                        
             log.reset()
+            torch.cuda.empty_cache()
             
         self.accelerator.end_training()        
         print("Train finished!")
