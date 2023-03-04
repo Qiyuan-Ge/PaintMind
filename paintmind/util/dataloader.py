@@ -16,9 +16,9 @@ class collate_fn:
             img_batch.append(img.unsqueeze(0))
             txt_batch.append(txt)
         img_batch = torch.cat(img_batch, dim=0)
-        input_ids, attn_mask = self.tokenize(txt_batch)
+        input_ids = self.tokenize(txt_batch)
 
-        return img_batch, input_ids, attn_mask
+        return img_batch, input_ids
 
    
 def TxtImgDataloader(dataset, batch_size, shuffle=True, text_model_name=DEFAULT_CLIP_NAME, num_workers=0, pin_memory=False):
