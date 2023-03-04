@@ -23,6 +23,8 @@ setup(
         'tqdm',
         'pycocotools',
         'omegaconf',
+        'datasets',
+        'sentencepiece',
         'pytorch_lightning',
     ],
 )
