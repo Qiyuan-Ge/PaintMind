@@ -6,7 +6,6 @@ from paintmind.text_encoder.clip import tokenize, DEFAULT_CLIP_NAME
     
 class collate_fn:
     def __init__(self, clip_version=DEFAULT_CLIP_NAME):
-        self.text_model_name = text_model_name
         self.tokenize = partial(tokenize, version=clip_version)
     
     def __call__(self, batch):
