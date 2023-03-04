@@ -9,6 +9,7 @@ from einops import rearrange
 from omegaconf import OmegaConf
 from accelerate import Accelerator
 from torchvision.utils import save_image
+from timm.optim import Adafactor
 from timm.scheduler.cosine_lr import CosineLRScheduler
 from paintmind.ldm.models.autoencoder import VQModel
 from paintmind.text_encoder.t5 import T5, DEFAULT_T5_NAME
@@ -123,7 +124,7 @@ class PaintMindTrainer:
         
         self.model = model
         self.num_epoch = num_epochs
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
+        self.optimizer = Adafactor(self.model.parameters(), lr=lr, weight_decay=wd)
         self.scheduler = CosineLRScheduler(self.optimizer, t_initial=num_epochs*len(dataloader), lr_min=lr_min, warmup_t=warmup_steps, warmup_lr_init=warmup_lr_init)
         self.model, self.optimizer, self.dataloader, self.scheduler = self.accelerator.prepare(self.model, self.optimizer, dataloader, self.scheduler)
         
@@ -195,8 +196,8 @@ class PaintMindTrainer:
     def train(self):
         self.steps = 0
         self.accelerator.init_trackers("my_project")
+        log = Log()
         for epoch in range(self.num_epoch):
-            log = Log()
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
                 for batch in tqdm_dataloader:
                     with self.accelerator.accumulate(self.model):
@@ -216,8 +217,9 @@ class PaintMindTrainer:
                                 
                             logits = self.model(quants, embeds, text_mask, mask_ratio=mask_ratio)
                             logits = rearrange(logits, 'b c h w -> b (h w) c')
-                            logit_scale = self.logit_scale.exp()
-                            scores = logit_scale * torch.matmul(F.normalize(logits, dim=2), self.first_stage.quantize.embedding.weight.T)
+                            logits_scale = self.logit_scale.exp()
+                            code_w = self.first_stage.quantize.embedding.weight.T.detach()
+                            scores = logits_scale * torch.matmul(F.normalize(logits, dim=2), code_w)
                             loss = self.loss_func(scores.reshape(-1, scores.shape[-1]), indice.reshape(-1))
                     
                         self.accelerator.backward(loss)
@@ -253,7 +255,9 @@ class PaintMindTrainer:
                     if self.steps % self.sample_interval == 0:
                         _, c, h, w = quants.shape
                         self.sample(images, scores, n=3, h=h, w=w, c=c)
-        
+                       
+            log.reset()
+            
         self.accelerator.end_training()        
         print("Train finished!")
         
