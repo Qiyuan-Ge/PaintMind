@@ -57,13 +57,13 @@ def encode_text(texts: List[str], name=DEFAULT_T5_NAME):
 
     return encoded_text, attn_mask
 
-class T5:
-    def __init__(self, name=DEFAULT_T5_NAME, max_length=MAX_LENGTH, device='cuda', mixed_precision='no'):
+class FrozenT5:
+    def __init__(self, name=DEFAULT_T5_NAME, device='cuda', mixed_precision='no'):
         self.tokenizer = get_tokenizer(name)
         self.t5 = get_model(name, mixed_precision).to(device)
-        self.t5.eval()
-        self.max_length = max_length
-        self.device = device
+        self.t5 = self.t5.eval()
+        for param in self.t5.parameters():
+            param.requires_grad = False
         
     @torch.no_grad()
     def tokenize(self, text: List[str]):
