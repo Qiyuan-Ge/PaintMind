@@ -28,7 +28,7 @@ class FrozenCLIP:
         self.model = get_model(version, pretrained, precision).to(device)
         
         self.model = self.model.eval()
-        for param in self.parameters():
+        for param in self.model.parameters():
             param.requires_grad = False
         
         self.n_repeat = n_repeat
