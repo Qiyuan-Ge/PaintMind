@@ -5,9 +5,9 @@ from paintmind.text_encoder.clip import tokenize, DEFAULT_CLIP_NAME
 
     
 class collate_fn:
-    def __init__(self, text_model_name=DEFAULT_CLIP_NAME):
+    def __init__(self, clip_version=DEFAULT_CLIP_NAME):
         self.text_model_name = text_model_name
-        self.tokenize = partial(tokenize, name=text_model_name)
+        self.tokenize = partial(tokenize, version=clip_version)
     
     def __call__(self, batch):
         img_batch = []
@@ -21,5 +21,5 @@ class collate_fn:
         return img_batch, input_ids
 
    
-def TxtImgDataloader(dataset, batch_size, shuffle=True, text_model_name=DEFAULT_CLIP_NAME, num_workers=0, pin_memory=False):
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn(text_model_name), pin_memory=pin_memory)
+def TxtImgDataloader(dataset, batch_size, shuffle=True, clip_version=DEFAULT_CLIP_NAME, num_workers=0, pin_memory=False):
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn(clip_version), pin_memory=pin_memory)
