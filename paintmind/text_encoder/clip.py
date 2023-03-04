@@ -1,84 +1,43 @@
 import torch
-import transformers
+import open_clip
 from typing import List
-from transformers import CLIPTokenizer, CLIPTextModel
+from einops import repeat
 
-transformers.logging.set_verbosity_error()
+DEFAULT_CLIP_NAME = 'coca_ViT-L-14'
+DEFAULT_CLIP_PRETRAINED = 'mscoco_finetuned_laion2b_s13b_b90k'
 
-DEFAULT_CLIP_NAME = 'openai/clip-vit-large-patch14'
-MAX_LENGTH = 77
-
-def exists(val):
-    return val is not None
-
-def default(val, d):
-    if exists(val):
-        return val
-    
-    return d() if callable(d) else d
-
-def get_tokenizer(name=DEFAULT_CLIP_NAME):
-    tokenizer = CLIPTokenizer.from_pretrained(name)
+def get_tokenizer(version=DEFAULT_CLIP_NAME):
+    tokenizer = open_clip.get_tokenizer(version)
     
     return tokenizer
 
-def get_model(name=DEFAULT_CLIP_NAME):
-    model = CLIPTextModel.from_pretrained(name)
+def get_model(version=DEFAULT_CLIP_NAME, pretrained=DEFAULT_CLIP_PRETRAINED, precision='fp32'):
+    model = open_clip.create_model(version, pretrained=pretrained, precision=precision)
     
     return model
 
-def tokenize(text: List[str], name=DEFAULT_CLIP_NAME):
-    tokenizer = get_tokenizer(name)
-    encodeddd = tokenizer(text, truncation=True, max_length=MAX_LENGTH, return_length=True, return_overflowing_tokens=False, padding="max_length", return_tensors="pt")
-    input_ids = encodeddd.input_ids
-    attn_mask = encodeddd.attention_mask
+def tokenize(text: List[str], version=DEFAULT_CLIP_NAME):
+    tokenizer = get_tokenizer(version)
     
-    return input_ids, attn_mask
+    return tokenizer(text)
 
-def encode_tokens(token_ids, name=DEFAULT_CLIP_NAME):
-    model = get_model(name)
-    model.eval()
-    with torch.no_grad():
-        output = model(input_ids=token_ids)
-        encoded_text = output.last_hidden_state.detach()
+class FrozenCLIP:
+    def __init__(self, version=DEFAULT_CLIP_NAME, pretrained=DEFAULT_CLIP_PRETRAINED, precision='fp32', device='cuda', n_repeat=1):
+        super().__init__()
+        self.tokenizer = get_tokenizer(version)
+        self.model = get_model(version, pretrained, precision).to(device)
         
-    return encoded_text
-
-def encode_text(texts: List[str], name=DEFAULT_CLIP_NAME):
-    token_ids, attn_mask = tokenize(texts, name=name)
-    encoded_text = encode_tokens(token_ids, name=name)
-
-    return encoded_text, attn_mask
-
-
-class CLIP:
-    def __init__(self, name=DEFAULT_CLIP_NAME, max_length=MAX_LENGTH, device='cuda'):
-        self.tokenizer = get_tokenizer(name)
-        self.clip_text = get_model(name).to(device)
-        self.clip_text.eval()
-        self.max_length = max_length
-        self.device = device
+        self.model = self.model.eval()
+        for param in self.parameters():
+            param.requires_grad = False
         
-    @torch.no_grad()
-    def tokenize(self, text: List[str]):
-        encodeddd = self.tokenizer(text, truncation=True, max_length=self.max_length, return_length=True, return_overflowing_tokens=False, padding="max_length", return_tensors="pt")
-        input_ids = encodeddd.input_ids
-        attn_mask = encodeddd.attention_mask
+        self.n_repeat = n_repeat
     
-        return input_ids, attn_mask
-        
     @torch.no_grad()
     def encode_tokens(self, token_ids):
-        output = self.clip_text(input_ids=token_ids)
-        encoded_text = output.last_hidden_state.detach()
+        z = self.model.encode_text(token_ids)
+        if z.ndim==2:
+            z = z[:, None, :]
+        z = repeat(z, 'b 1 d -> b k d', k=self.n_repeat)
         
-        return encoded_text
-    
-    @torch.no_grad()
-    def encode_text(self, texts: List[str]):
-        input_ids, attn_mask = self.tokenize(texts)
-        encoded_text = self.encode_tokens(input_ids)
-        
-        return encoded_text, attn_mask 
-        
-        
+        return z
