@@ -12,7 +12,7 @@ from torchvision.utils import save_image
 from timm.optim import Adafactor
 from timm.scheduler.cosine_lr import CosineLRScheduler
 from paintmind.ldm.models.autoencoder import VQModel
-from paintmind.text_encoder.t5 import T5, DEFAULT_T5_NAME
+from paintmind.text_encoder.t5 import FrozenT5, DEFAULT_T5_NAME
 
 
 def exists(x):
@@ -98,7 +98,6 @@ class PaintMindTrainer:
                  ema_decay=None,
                  max_grad_norm=1.0, 
                  text_model_name=DEFAULT_T5_NAME, 
-                 text_max_length=256,
                  checkpoint_path=None,
                  sample_interval=1000,
                  save_every_n_step=1000,
@@ -130,8 +129,10 @@ class PaintMindTrainer:
         
         self.max_grad_norm = max_grad_norm
         
-        self.text = T5(text_model_name, text_max_length, device=self.device, mixed_precision=mixed_precision)
+        self.text = FrozenT5(text_model_name, device=self.device, mixed_precision=mixed_precision)
         self.first_stage = load_first_stage(first_stage_config_path, first_stage_pretrained_path).to(self.device)
+        for param in self.first_stage.parameters():
+            param.requires_grad = False
         
         self.mask_ratio = linear_masked_p_schedule()
         self.sample_interval = sample_interval
