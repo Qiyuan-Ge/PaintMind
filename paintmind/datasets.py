@@ -3,12 +3,13 @@ import torch
 import zipfile
 import numpy as np
 from PIL import Image
+from datasets import load_dataset
 from pycocotools.coco import COCO
 
 
-def load_dataset(name='coco', root=None, transform=None):
-    if name == 'coco':
-        return coco(root, transform=transform)
+# def load_dataset(name='coco', root=None, transform=None):
+#     if name == 'coco':
+#         return coco(root, transform=transform)
 
 
 def unzip_file(zip_src, tgt_dir):
@@ -18,9 +19,29 @@ def unzip_file(zip_src, tgt_dir):
             fz.extract(file, tgt_dir)       
     else:
         raise RuntimeError("This is not zip file.")
+        
+
+class DiffusionDB:
+    def __init__(self, version='large_random_100k', transform=None):
+        self.dataset = load_dataset("poloclub/diffusiondb", version)['train']
+        self.transform = transform
+        
+    def __getitem__(self, idx):
+        data = self.dataset[idx]
+        
+        image = data['image']
+        prompt = data['prompt']
+        
+        if self.transform is not None:
+            image = self.transform(image)
+            
+        return image, prompt
+        
+    def __len__(self):
+        return len(self.data)        
 
 
-class coco:
+class CoCo:
     def __init__(self, root, dataType='train2017', annType='captions', transform=None):
         self.root = root
         self.img_dir = '{}/{}'.format(root, dataType)
