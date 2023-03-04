@@ -9,10 +9,9 @@ from einops import rearrange
 from omegaconf import OmegaConf
 from accelerate import Accelerator
 from torchvision.utils import save_image
-from timm.optim import Adafactor
 from timm.scheduler.cosine_lr import CosineLRScheduler
 from paintmind.ldm.models.autoencoder import VQModel
-from paintmind.text_encoder.clip import FrozenCLIP, DEFAULT_CLIP_NAME
+from paintmind.text_encoder.clip import FrozenCLIP, DEFAULT_CLIP_NAME, DEFAULT_CLIP_PRETRAINED
 
 
 def exists(x):
@@ -97,7 +96,8 @@ class PaintMindTrainer:
                  warmup_lr_init,
                  ema_decay=None,
                  max_grad_norm=1.0, 
-                 text_model_name=DEFAULT_CLIP_NAME, 
+                 clip_version=DEFAULT_CLIP_NAME,
+                 clip_pretrained=DEFAULT_CLIP_PRETRAINED,
                  checkpoint_path=None,
                  sample_interval=1000,
                  save_every_n_step=1000,
@@ -129,7 +129,7 @@ class PaintMindTrainer:
         
         self.max_grad_norm = max_grad_norm
         precision = 'fp16' if mixed_precision == 'fp16' else 'fp32'
-        self.text = FrozenCLIP(version=text_model_name, pretrained=DEFAULT_CLIP_PRETRAINED, precision=precision, device=self.device, n_repeat=1)
+        self.text = FrozenCLIP(version=clip_version, pretrained=clip_pretrained, precision=precision, device=self.device, n_repeat=1)
         self.first_stage = load_first_stage(first_stage_config_path, first_stage_pretrained_path).to(self.device)
         for param in self.first_stage.parameters():
             param.requires_grad = False
