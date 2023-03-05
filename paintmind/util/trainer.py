@@ -253,7 +253,7 @@ class PaintMindTrainer:
                         
                     if self.steps % self.sample_interval == 0:
                         _, c, h, w = quants.shape
-                        self.sample(images, scores, n=3, h=h, w=w, c=c)
+                        self.sample(images, scores.detach(), n=3, h=h, w=w, c=c)
                        
             log.reset()
             torch.cuda.empty_cache()
