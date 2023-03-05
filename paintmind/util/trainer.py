@@ -174,7 +174,8 @@ class PaintMindTrainer:
         text_emb = self.text.encode_tokens(token_ids)
         
         return text_emb
-           
+    
+    @torch.no_grad()       
     def sample(self, images, scores, n, h, w, c):
         
         images = images[:n]
