@@ -218,9 +218,7 @@ class PaintMindTrainer:
                                 
                             logits = self.model(quants, text_embs, text_mask=None, mask_ratio=mask_ratio)
                             logits = rearrange(logits, 'b c h w -> b (h w) c')
-                            logits_scale = self.logit_scale.exp()
-                            code_w = self.first_stage.quantize.embedding.weight.T.detach()
-                            scores = logits_scale * torch.matmul(F.normalize(logits, dim=2), code_w)
+                            scores = self.logit_scale.exp() * torch.matmul(F.normalize(logits, dim=2), self.first_stage.quantize.embedding.weight.T)
                             loss = self.loss_func(scores.reshape(-1, scores.shape[-1]), indice.reshape(-1))
                     
                         self.accelerator.backward(loss)
