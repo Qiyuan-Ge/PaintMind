@@ -19,8 +19,43 @@ def unzip_file(zip_src, tgt_dir):
             fz.extract(file, tgt_dir)       
     else:
         raise RuntimeError("This is not zip file.")
-        
 
+class LaionCoco:
+    def __init__(self, parquet_folder, image_folder=None, transform=None, download=True):
+        self.image_folder = image_folder
+        df = pd.DataFrame()
+        for name in os.listdir(parquet_folder):
+            if name.endswith('.parquet'):
+                df = pd.concat([df, pd.read_parquet(os.path.join(parquet_folder, name))])
+        
+        df = df.reset_index(drop=True)
+        df['img_name'] = df.index
+        df['img_name'] = df['img_name'].apply(lambda x: str(x)+'.png')
+        self.df = df
+        
+        if download:
+            self.download_drom_url()
+            
+        self.transform = transform
+  
+    def download_drom_url(self):
+        cnt = 0
+        for i in tqdm(self.df.index):
+            url = self.df.loc[i, 'URL']
+            img_name = self.df.loc[i, 'img_name']
+            try:
+                chunks = requests.get(url, stream=True)
+                with open(f'{self.image_folder}/{img_name}', 'wb') as f:
+                    for c in chunks:
+                        f.write(c)
+            except:
+                pass
+    
+    def __getitem__(self, idx):
+        
+    def __len__(self): 
+        
+        
 class DiffusionDB:
     def __init__(self, version='large_random_100k', transform=None):
         self.dataset = load_dataset("poloclub/diffusiondb", version)['train']
@@ -40,7 +75,7 @@ class DiffusionDB:
     def __len__(self):
         return len(self.data)        
 
-
+    
 class CoCo:
     def __init__(self, root, dataType='train2017', annType='captions', transform=None):
         self.root = root
