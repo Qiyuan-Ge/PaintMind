@@ -39,7 +39,6 @@ class LaionCoco:
         self.transform = transform
   
     def download_drom_url(self):
-        cnt = 0
         for i in tqdm(self.df.index):
             url = self.df.loc[i, 'URL']
             img_name = self.df.loc[i, 'img_name']
