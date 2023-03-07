@@ -1,17 +1,14 @@
 import os
 import torch
 import numpy as np
-import torch.nn as nn
 import torch.nn.functional as F
-from copy import deepcopy
 from tqdm.auto import tqdm
 from einops import rearrange
-from omegaconf import OmegaConf
 from accelerate import Accelerator
 from torchvision.utils import save_image
 from timm.scheduler.cosine_lr import CosineLRScheduler
-from paintmind.ldm.models.autoencoder import VQModel
-from paintmind.text_encoder.clip import FrozenCLIP, DEFAULT_CLIP_NAME, DEFAULT_CLIP_PRETRAINED
+from paintmind.ldm import FrozenVQModel
+from paintmind.encoder.clip import FrozenOpenCLIPEmbedder, CLIP_ARCH, CLIP_VERSION
 
 
 def exists(x):
@@ -24,20 +21,39 @@ def transform_reverse(x):
     
     return x
 
-def load_first_stage(config_path, ckpt_path=None):
-    config = OmegaConf.load(config_path)
-    model = VQModel(**config.model.params)
-    if ckpt_path is not None:
-        sd = torch.load(ckpt_path, map_location="cpu")["state_dict"]
-    missing, unexpected = model.load_state_dict(sd, strict=False)
-    
-    return model.eval()
-
 def linear_masked_p_schedule(timesteps=75):
     p_min = 0.25
     p_max = 1.00
     
     return np.linspace(p_min, p_max, timesteps)
+
+def random_masking(x, mask_ratio):
+    """
+    Perform per-sample random masking by per-sample shuffling.
+    Per-sample shuffling is done by argsort random noise.
+    x: [N, L, D], sequence
+    """
+    
+    N, L, D = x.shape  # batch, length, dim
+    len_keep = int(L * (1 - mask_ratio))
+    
+    noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+    
+    # sort noise for each sample
+    ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+    ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+    # keep the first subset
+    ids_keep = ids_shuffle[:, :len_keep]
+    x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+    # generate the binary mask: 0 is keep, 1 is remove
+    mask = torch.ones([N, L], device=x.device)
+    mask[:, :len_keep] = 0
+    # unshuffle to get the binary mask
+    mask = torch.gather(mask, dim=1, index=ids_restore)
+
+    return x_masked, mask, ids_restore
     
 class Log:
     def __init__(self):
@@ -61,29 +77,6 @@ class Log:
         return self.data[name]
 
 
-class EMA:
-    """Exponential Moving Average
-    Args:
-        model:
-        decay:
-        device:
-    """    
-    def __init__(self, model, decay=0.9999, device='cpu'):
-        self.model = deepcopy(model)
-        self.decay = decay
-        self.device = device
-        self.model.to(device)
-        
-    @torch.no_grad()
-    def update(self, model2):
-        for p_ema, p_model in zip(self.model.state_dict().values(), model2.state_dict().values()):
-            p_model = p_model.to(self.device)
-            p_ema.copy_(self.func(p_ema, p_model))
-            
-    def func(self, p1, p2):
-        return self.decay * p1 + (1 - self.decay) * p2
-
-
 class PaintMindTrainer:
     def __init__(self, 
                  model, 
@@ -94,10 +87,9 @@ class PaintMindTrainer:
                  lr_min,
                  warmup_steps,
                  warmup_lr_init,
-                 ema_decay=None,
                  max_grad_norm=1.0, 
-                 clip_version=DEFAULT_CLIP_NAME,
-                 clip_pretrained=DEFAULT_CLIP_PRETRAINED,
+                 clip_arch=CLIP_ARCH,
+                 clip_version=CLIP_VERSION,
                  checkpoint_path=None,
                  sample_interval=1000,
                  save_every_n_step=1000,
@@ -116,23 +108,16 @@ class PaintMindTrainer:
         self.device = self.accelerator.device
         os.makedirs(log_dir, exist_ok=True)
         
-        self.use_ema = False
-        if exists(ema_decay):
-            self.use_ema = True
-            self.ema = EMA(model, ema_decay)
-        
-        self.model = model
         self.num_epoch = num_epochs
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
+        self.stage_one_model = FrozenVQModel(first_stage_config_path, first_stage_pretrained_path, device=self.device, freeze=True)
+        self.stage_two_model = model
+        self.optimizer = torch.optim.AdamW(self.stage_two_model.parameters(), lr=lr, weight_decay=wd)
         self.scheduler = CosineLRScheduler(self.optimizer, t_initial=num_epochs*len(dataloader), lr_min=lr_min, warmup_t=warmup_steps, warmup_lr_init=warmup_lr_init)
-        self.model, self.optimizer, self.dataloader, self.scheduler = self.accelerator.prepare(self.model, self.optimizer, dataloader, self.scheduler)
+        self.stage_two_model, self.optimizer, self.dataloader, self.scheduler = self.accelerator.prepare(self.stage_two_model, self.optimizer, dataloader, self.scheduler)
         
         self.max_grad_norm = max_grad_norm
         precision = 'fp16' if mixed_precision == 'fp16' else 'fp32'
-        self.text = FrozenCLIP(version=clip_version, pretrained=clip_pretrained, precision=precision, device=self.device, n_repeat=1)
-        self.first_stage = load_first_stage(first_stage_config_path, first_stage_pretrained_path).to(self.device)
-        for param in self.first_stage.parameters():
-            param.requires_grad = False
+        self.clip = FrozenOpenCLIPEmbedder(arch=clip_arch, version=clip_version, device=self.device, max_length=77, freeze=True, layer="last", precision=precision)
         
         self.mask_ratio = linear_masked_p_schedule()
         self.sample_interval = sample_interval
@@ -143,37 +128,17 @@ class PaintMindTrainer:
         
         self.sample_dir = os.path.join(checkpoint_path, 'sample')
         os.makedirs(self.sample_dir, exist_ok=True)
-        
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
          
     def save(self):
         self.accelerator.wait_for_everyone()
-        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        unwrapped_model = self.accelerator.unwrap_model(self.stage_two_model)
         self.accelerator.save(unwrapped_model.state_dict(), os.path.join(self.checkpoint_path, f'model_step_{self.steps}.pt'))
-    
-    def _ema_update(self):
-        self.accelerator.wait_for_everyone()
-        unwrapped_model = self.accelerator.unwrap_model(self.model)
-        self.ema.update(unwrapped_model)
-        self.accelerator.save(self.ema.model.state_dict(), os.path.join(self.checkpoint_path, 'model_ema.pt'))
         
     @torch.no_grad()
-    def vqae_encode(self, imgs):
-        quant, diff, (_,_,ind) = self.first_stage.encode(imgs)
+    def text_embbed(self, tokens):
+        text = self.clip.encode_with_transformer(tokens)
         
-        return quant, ind
-    
-    @torch.no_grad()
-    def vqae_decode(self, quant):
-        imgs = self.first_stage.decode(quant)
-        
-        return imgs
-    
-    @torch.no_grad()
-    def text_encode(self, token_ids):
-        text_emb = self.text.encode_tokens(token_ids)
-        
-        return text_emb
+        return text
     
     @torch.no_grad()       
     def sample(self, images, scores, n, h, w, c):
@@ -183,59 +148,62 @@ class PaintMindTrainer:
         
         indice = scores.argmax(dim=-1)
         
-        quants = self.first_stage.quantize.get_codebook_entry(indice, shape=(n, h, w, c))
-        imgrec = self.vqae_decode(quants)
+        quants = self.stage_one_model.get_codebook_entry(indice, shape=(n, h, w, c))
+        imgrec = self.stage_one_model.decode(quants)
         
         image_path = os.path.join(self.sample_dir, f"sample-{self.steps}.png")
         
         save_image(transform_reverse(torch.cat([images, imgrec], dim=0)), image_path, nrow=n)
         
-    def loss_func(self, x, label):
-        loss = F.cross_entropy(x, label)
+    def loss_func(self, x, label, mask):
+        one_minus_mask = 1 - mask
+        loss = F.cross_entropy(x, label, reduction='none')
+        loss = (loss * mask).sum() / mask.sum() + (loss * one_minus_mask).sum() / (one_minus_mask.sum() + 1e-12)
         
         return loss
     
+    def compute_acc(self, x, y):
+        acc = (x.argmax(dim=-1) == y).sum() / y.numel()
+        
+        return acc.item()
+    
     def train(self):
         self.steps = 0
-        self.accelerator.init_trackers("my_project")
+        self.accelerator.init_trackers("paintmind")
         log = Log()
         for epoch in range(self.num_epoch):
             with tqdm(self.dataloader, dynamic_ncols=True, disable=not self.accelerator.is_local_main_process) as tqdm_dataloader:
                 for batch in tqdm_dataloader:
-                    with self.accelerator.accumulate(self.model):
-                        images, tokens = batch
+                    with self.accelerator.accumulate(self.stage_two_model):
+                        imgs, text = batch
 
                         with self.accelerator.autocast():
-                            quants, indice = self.vqae_encode(images)
                             
+                            z, indices = self.stage_one_model.encode(imgs)
                             mask_ratio = np.random.choice(self.mask_ratio)
-                            free_guide = np.random.random()
-                            
-                            if mask_ratio > 0.25 and free_guide > 0.9:
-                                text_embs = None
-                            else:
-                                text_embs = self.text_encode(tokens)
-                                
-                            logits = self.model(quants, text_embs, text_mask=None, mask_ratio=mask_ratio)
-                            logits = rearrange(logits, 'b c h w -> b (h w) c')
-                            scores = self.logit_scale.exp() * torch.matmul(F.normalize(logits, dim=2), self.first_stage.quantize.embedding.weight.T)
-                            loss = self.loss_func(scores.reshape(-1, scores.shape[-1]), indice.reshape(-1))
+                            b, c, h, w = z.shape
+                            z = rearrange(z, 'b c h w -> b (h w) c')
+                            z, mask, ids_restore = random_masking(z, mask_ratio)
+                            random_indices = torch.randint(0, 256, (b, ids_restore.shape[1]-z.shape[1]), device=z.device).long()
+                            replace_tokens = self.stage_one_model.get_embedding()(random_indices)
+                            z = torch.cat([z[:, :, :], replace_tokens], dim=1)
+                            z = torch.gather(z, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, z.shape[2])) #unshuffle
+                            text = self.text_embbed(text)                      
+                            pred = self.stage_two_model(z, text)                     
+                            loss = self.loss_func(pred.reshape(-1, pred.shape[-1]), indices.reshape(-1), mask.reshape(-1))
+                            acc = self.compute_acc(pred.reshape(-1, pred.shape[-1]), indices.reshape(-1))
                     
                         self.accelerator.backward(loss)
                         
                         if self.accelerator.sync_gradients:
-                            self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                            self.accelerator.clip_grad_norm_(self.stage_two_model.parameters(), self.max_grad_norm)
                         
                         self.steps += 1
                         self.optimizer.step()
                         self.scheduler.step(self.steps)
                         self.optimizer.zero_grad()
                     
-                    if self.use_ema:
-                        self._ema_update()
-                    
-                    bs = images.shape[0]
-                    log.add({'total_loss':loss.item()*bs, 'n_sample':bs})
+                    log.add({'total_loss':loss.item()*b, 'total_acc':acc*b, 'n_sample':b})
                     log.update({'loss':loss.item(), 'lr':self.optimizer.param_groups[0]['lr']})
    
                     tqdm_dataloader.set_postfix(
@@ -243,6 +211,7 @@ class PaintMindTrainer:
                             "Epoch"      : epoch,
                             "Loss"       : log['loss'],
                             "MeanLoss"   : log['total_loss']/log['n_sample'],
+                            "Acc"        : log['total_acc']/log['n_sample'],
                             "LR"         : log['lr'],
                         }
                     )
@@ -252,8 +221,7 @@ class PaintMindTrainer:
                         self.save()
                         
                     if self.steps % self.sample_interval == 0:
-                        _, c, h, w = quants.shape
-                        self.sample(images, scores.detach(), n=3, h=h, w=w, c=c)
+                        self.sample(imgs, pred.detach(), n=4, h=h, w=w, c=c)
                        
             log.reset()
             torch.cuda.empty_cache()

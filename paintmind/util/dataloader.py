@@ -1,12 +1,12 @@
 import torch
 from functools import partial
 from torch.utils.data import DataLoader
-from paintmind.text_encoder.clip import tokenize, DEFAULT_CLIP_NAME
+from paintmind.encoder.clip import tokenize, CLIP_ARCH
 
     
 class collate_fn:
-    def __init__(self, clip_version=DEFAULT_CLIP_NAME):
-        self.tokenize = partial(tokenize, version=clip_version)
+    def __init__(self, clip_arch=CLIP_ARCH):
+        self.tokenize = partial(tokenize, arch=clip_arch)
     
     def __call__(self, batch):
         img_batch = []
@@ -20,5 +20,5 @@ class collate_fn:
         return img_batch, input_ids
 
    
-def TxtImgDataloader(dataset, batch_size, shuffle=True, clip_version=DEFAULT_CLIP_NAME, num_workers=0, pin_memory=False):
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn(clip_version), pin_memory=pin_memory)
+def TxtImgDataloader(dataset, batch_size, shuffle=True, clip_arch=CLIP_ARCH, num_workers=0, pin_memory=False):
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn(clip_arch), pin_memory=pin_memory)
