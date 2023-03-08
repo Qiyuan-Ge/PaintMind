@@ -147,7 +147,7 @@ class PaintMindTrainer:
                 for batch in tqdm_dataloader:
                     with self.accelerator.accumulate(self.stage_two_model):
                         imgs, text = batch
-
+                        bs = imgs.shape[0]
                         with self.accelerator.autocast():
                             
                             z, indices = self.stage_one_model.encode(imgs)
@@ -167,7 +167,7 @@ class PaintMindTrainer:
                         self.scheduler.step(self.steps)
                         self.optimizer.zero_grad()
                     
-                    log.add({'total_loss':loss.item()*b, 'total_acc':acc*b, 'n_sample':b})
+                    log.add({'total_loss':loss.item()*bs, 'total_acc':acc*bs, 'n_sample':bs})
                     log.update({'loss':loss.item(), 'lr':self.optimizer.param_groups[0]['lr']})
    
                     tqdm_dataloader.set_postfix(
