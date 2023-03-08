@@ -144,17 +144,53 @@ class Transformer(nn.Module):
     def __init__(self, dim, context_dim=None, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1):
         super().__init__() 
         self.proj = nn.Linear(in_channels, dim)
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, in_channels))
         self.pos_emb = nn.Parameter(torch.randn(1, 1024, dim))
         self.encoder = AttentionLayers(dim, d_head, context_dim, num_heads, depth, dropout)
         self.decoder = nn.Linear(dim, 256)
+        
+    def random_masking(self, x, mask_ratio):
+        """
+        Perform per-sample random masking by per-sample shuffling.
+        Per-sample shuffling is done by argsort random noise.
+        x: [N, L, D], sequence
+        """
+        
+        N, L, D = x.shape  # batch, length, dim
+        len_keep = int(L * (1 - mask_ratio))
+        
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+        
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([N, L], device=x.device)
+        mask[:, :len_keep] = 0
+        # unshuffle to get the binary mask
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return x_masked, mask, ids_restore
     
-    def forward(self, x, text=None, mask=None): # x=(b c h w)
+    def forward(self, x, text=None, mask_ratio=0.75): # x=(b c h w)
+        b, c, h, w = x.shape
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1]-x.shape[1], 1)
+        x = torch.cat([x[:, :, :], mask_tokens], dim=1)
+        x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        
         x = self.proj(x)
         x = x + self.pos_emb
-        x = self.encoder(x, text, mask) #[N, L, D]
+        x = self.encoder(x, text) #[N, L, D]
         x = self.decoder(x)
 
-        return x
+        return x, mask
 
 def create_model(dim, context_dim=None, in_channels=3, d_head=64, num_heads=12, depth=12, dropout=0.1):
     model = Transformer(dim, context_dim, in_channels, d_head, num_heads, depth, dropout)
