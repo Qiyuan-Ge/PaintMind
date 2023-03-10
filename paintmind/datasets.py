@@ -1,6 +1,7 @@
 import os
 import torch
 import zipfile
+import torchvision
 import numpy as np
 from PIL import Image
 from datasets import load_dataset
