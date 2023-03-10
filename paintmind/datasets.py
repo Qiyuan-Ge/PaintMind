@@ -17,8 +17,8 @@ def unzip_file(zip_src, tgt_dir):
         
         
 class Flickr30k:
-    def __init__(self, image_folder, ann_file, transform=None):
-        self.dataset = torchvision.datasets.Flickr30k(root=image_folder, ann_file=ann_file)
+    def __init__(self, img_dir, ann_file, transform=None):
+        self.dataset = torchvision.datasets.Flickr30k(root=img_dir, ann_file=ann_file)
         self.transform = transform
         
     def __getitem__(self, idx):
