@@ -7,11 +7,6 @@ from datasets import load_dataset
 from pycocotools.coco import COCO
 
 
-# def load_dataset(name='coco', root=None, transform=None):
-#     if name == 'coco':
-#         return coco(root, transform=transform)
-
-
 def unzip_file(zip_src, tgt_dir):
     if zipfile.is_zipfile(zip_src):
         fz = zipfile.ZipFile(zip_src, 'r')
@@ -19,6 +14,24 @@ def unzip_file(zip_src, tgt_dir):
             fz.extract(file, tgt_dir)       
     else:
         raise RuntimeError("This is not zip file.")
+        
+        
+class Flickr30k:
+    def __init__(self, image_folder, ann_file, transform=None):
+        self.dataset = torchvision.datasets.Flickr30k(root=image_folder, ann_file=ann_file)
+        self.transform = transform
+        
+    def __getitem__(self, idx):
+        img, anns = self.dataset[idx]
+        ann = np.random.choice(anns)
+        
+        if self.transform is not None:
+            img = self.transform(img)
+            
+        return img, ann
+    
+    def __len__(self):
+        return len(self.dataset)
         
 
 class DiffusionDB:
@@ -38,7 +51,7 @@ class DiffusionDB:
         return image, prompt
         
     def __len__(self):
-        return len(self.dataset)        
+        return len(self.dataset)
 
 
 class CoCo:
@@ -56,6 +69,7 @@ class CoCo:
         annid = self.coco.getAnnIds(imgIds=imgid)
         img = Image.open(os.path.join(self.img_dir, img_name)).convert('RGB')
         ann = np.random.choice(self.coco.loadAnns(annid))['caption']
+        
         if self.transform is not None:
             img = self.transform(img)
         
