@@ -31,7 +31,10 @@ class ImageNet:
             image = self.transform(image)
             
         return image, caption
-            
+    
+    def __len__(self):
+        return len(self.dataset)
+           
         
 class Flickr30k:
     def __init__(self, img_dir, ann_file, transform=None):
