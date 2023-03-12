@@ -122,8 +122,8 @@ class PaintMindTrainer:
             pred = F.softmax(pred, dim=-1)
             values, indice = pred.max(dim=-1)
             
-            latent = rearrange(codebook(indice), 'b (h w) c -> b c h w', h=H, w=W)
-            img = self.stage_one_model.decode(latent)
+            z_quant = rearrange(codebook(indice), 'b (h w) c -> b c h w', h=H, w=W)
+            img = self.stage_one_model.decode(z_quant)
             imgs.append(img.cpu())
             
             prob_ids_descend = torch.argsort(values, descending=True)
@@ -200,7 +200,7 @@ class PaintMindTrainer:
                             "LR"         : log['lr'],
                         }
                     )
-                    self.accelerator.log({"loss": log['total_loss']/log['n'], "lr": log['lr']}, step=self.steps)
+                    self.accelerator.log({"loss": log['total_loss']/log['n'], "accuracy": log['total_acc']/log['n'], "lr": log['lr']}, step=self.steps)
                     
                     if self.steps % self.save_every_n_step == 0:
                         self.save()
