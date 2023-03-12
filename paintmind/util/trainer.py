@@ -171,9 +171,9 @@ class PaintMindTrainer:
                         
                         with self.accelerator.autocast():
                             
-                            latent, indices = self.stage_one_model.encode(imgs)
+                            z_quant, indices = self.stage_one_model.encode(imgs)
                             text = self.text_embbed(text)                      
-                            pred = self.stage_two_model(latent, text, replaced_ratio=cosine_masked_p_generator(), codebook=self.stage_one_model.get_embedding())                     
+                            pred = self.stage_two_model(z_quant, text, replaced_ratio=cosine_masked_p_generator(), codebook=self.stage_one_model.get_embedding())                     
                             loss = self.loss_func(pred, indices)
                             accuracy = self.compute_acc(pred, indices)
                     
@@ -206,7 +206,7 @@ class PaintMindTrainer:
                         self.save()
                         
                     if self.steps % self.sample_interval == 0:
-                        _, _, H, W = latent.shape
+                        _, _, H, W = z_quant.shape
                         N = 1
                         self.sample(N, H, W, text=text[:N], timesteps=20)
                         
