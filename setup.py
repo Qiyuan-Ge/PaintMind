@@ -18,7 +18,7 @@ setup(
         'torch>=1.6',
         'torchvision',
         'timm',
-        'transformers',
+        'kornia',
         'accelerate',
         'tqdm',
         'pycocotools',
