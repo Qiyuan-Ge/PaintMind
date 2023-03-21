@@ -62,7 +62,7 @@ vit_b_vqvae_config = {
     'image_size'  :224, 
     'patch_size'  :8,
     'dim'         :768,
-    'depth'       :6,
+    'depth'       :12,
     'heads'       :12,
     'mlp_dim'     :3072,
     'channels'    :3,
