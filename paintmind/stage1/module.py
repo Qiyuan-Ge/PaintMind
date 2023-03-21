@@ -113,7 +113,7 @@ class Encoder(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, dim))
         
         self.patch_embed = PatchEmbed(image_size, patch_size, channels, dim)
-        self.position_embed = nn.Parameter(torch.randn(1, self.patch_embedding.num_patches+1, dim))
+        self.position_embed = nn.Parameter(torch.randn(1, self.patch_embed.num_patches+1, dim))
         self.dropout = nn.Dropout(dropout)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
         
