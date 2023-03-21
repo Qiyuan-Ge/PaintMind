@@ -94,7 +94,7 @@ class VQGANTrainer(nn.Module):
         log_dir="./log"
     ):
         super().__init__()
-        kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        kwargs = DistributedDataParallelKwargs(find_unused_parameters=False)
         self.accelerator = Accelerator(
             kwargs_handlers=[kwargs],
             mixed_precision=mixed_precision,
