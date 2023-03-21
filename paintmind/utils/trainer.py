@@ -253,7 +253,7 @@ class VQGANTrainer(nn.Module):
                 imgs_and_recs = rearrange(imgs_and_recs, 'r b ... -> (b r) ...')
                 imgs_and_recs = imgs_and_recs.detach().cpu().float().clamp(-1., 1.)
                 
-                grid = make_grid(imgs_and_recs, nrow=2, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_recs, nrow=6, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.vqvae.train()
         
@@ -392,6 +392,6 @@ class PaintMindTrainer(nn.Module):
                 imgs_and_gens = torch.cat(imgs_and_gens, dim=0)
                 imgs_and_gens = imgs_and_gens.detach().cpu().float().clamp(-1., 1.)
                 
-                grid = make_grid(imgs_and_gens, nrow=2, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_gens, nrow=6, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.model.train()
