@@ -85,6 +85,8 @@ class VQGANTrainer(nn.Module):
         valid_size=10,
         base_lr=3e-4,
         batch_size=32,
+        num_workers=0,
+        pin_memory=False,
         grad_accum_steps=1,
         mixed_precision='fp16',
         max_grad_norm=1.0,
@@ -120,8 +122,8 @@ class VQGANTrainer(nn.Module):
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
         print(f"train dataset size: {train_size}, valid dataset size: {valid_size}")
         
-        self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True)
-        self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False)
+        self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
+        self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.optim = torch.optim.Adam(self.vqvae.parameters(), lr=base_lr)
         self.discr_optim = torch.optim.Adam(self.discr.parameters(), lr=base_lr)
@@ -253,7 +255,7 @@ class VQGANTrainer(nn.Module):
                 imgs_and_recs = rearrange(imgs_and_recs, 'r b ... -> (b r) ...')
                 imgs_and_recs = imgs_and_recs.detach().cpu().float().clamp(-1., 1.)
                 
-                grid = make_grid(imgs_and_recs, nrow=6, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_recs, nrow=4, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.vqvae.train()
         
@@ -271,6 +273,8 @@ class PaintMindTrainer(nn.Module):
         weight_decay=0.05,
         warmup_lr_init=1e-5,
         batch_size=32,
+        num_workers=0,
+        pin_memory=False,
         grad_accum_steps=1,
         mixed_precision='fp16',
         max_grad_norm=1.0,
@@ -293,8 +297,8 @@ class PaintMindTrainer(nn.Module):
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
         print(f"train dataset size: {train_size}, valid dataset size: {valid_size}")
         
-        self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True)
-        self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False)
+        self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
+        self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
         self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=base_lr, weight_decay=weight_decay)
@@ -392,6 +396,6 @@ class PaintMindTrainer(nn.Module):
                 imgs_and_gens = torch.cat(imgs_and_gens, dim=0)
                 imgs_and_gens = imgs_and_gens.detach().cpu().float().clamp(-1., 1.)
                 
-                grid = make_grid(imgs_and_gens, nrow=6, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_gens, nrow=4, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.model.train()
