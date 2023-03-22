@@ -88,9 +88,8 @@ class CLIPImageEmbedder(nn.Module):
         x = kornia.geometry.resize(x, (224, 224), interpolation='bicubic', align_corners=True, antialias=False)
         return x
 
-    def forward(self, image, preprocess=False):
-        if preprocess:
-            image = self.preprocess(image)
+    def forward(self, image):
+        image = self.preprocess(image)
         z = self.model(image)
         return z
     

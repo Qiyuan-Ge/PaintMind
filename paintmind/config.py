@@ -3,6 +3,7 @@ from copy import deepcopy
 from .stage1 import VQVAE
 from .model import PaintMind
 
+
 class Config:
     def __init__(self, config=None):
         if config is not None:
@@ -44,14 +45,15 @@ vit_s_vqvae_config = {
     'embed_dim'   :32,
     'beta'        :0.25,
     'image_size'  :256, 
-    'patch_size'  :8,
+    'patch_size'  :16,
     'dim'         :512,
     'depth'       :8,
     'heads'       :8,
     'mlp_dim'     :2048,
     'channels'    :3,
     'dim_head'    :64, 
-    'dropout'     :0.1, 
+    'dropout'     :0.1,
+    'teacher_cfg' :{'arch':'ViT-B-16', 'version':'laion2b_s34b_b88k'},
 }
 
 
@@ -60,14 +62,15 @@ vit_b_vqvae_config = {
     'embed_dim'   :32,
     'beta'        :0.25,
     'image_size'  :256, 
-    'patch_size'  :8,
+    'patch_size'  :16,
     'dim'         :768,
     'depth'       :12,
     'heads'       :12,
     'mlp_dim'     :3072,
     'channels'    :3,
     'dim_head'    :64, 
-    'dropout'     :0.1, 
+    'dropout'     :0.1,
+    'teacher_cfg' :{'arch':'ViT-L-14', 'version':'laion2b_s32b_b82k'},
 }
 
 

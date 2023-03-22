@@ -116,14 +116,17 @@ class Encoder(nn.Module):
 
         num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
         
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, dim))
+        
         self.to_patch_embedding = PatchEmbed(image_size, patch_size, channels, dim)
-        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim))
+        self.position_embedding = nn.Parameter(torch.randn(1, num_patches+1, dim))
         self.dropout = nn.Dropout(dropout)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
         
         self.initialize_weights()
 
     def initialize_weights(self):
+        torch.nn.init.normal_(self.cls_token, std=.02)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -137,11 +140,15 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         x = self.to_patch_embedding(x)
+        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
         x += self.position_embedding
         x = self.dropout(x)
         x = self.transformer(x)
+        pool = x[:, 0, :]
+        x = x[:, 1:, :]
         
-        return x
+        return x, pool
  
        
 class Decoder(nn.Module):

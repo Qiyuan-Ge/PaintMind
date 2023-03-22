@@ -10,15 +10,15 @@ from torch.utils.data import DataLoader, random_split
 from torchvision.utils import make_grid, save_image
 from tqdm.auto import tqdm
 from einops import rearrange
+from paintmind.clip import CLIPImageEmbedder
 from paintmind.stage1 import Discriminator
 from paintmind.utils.lr_scheduler import build_scheduler
 
 
 # discriminator
 
-def log(t, eps = 1e-10):
-    return torch.log(t + eps)
-
+def l2norm(t):
+    return F.normalize(t, p=2, dim=-1)
 
 def hinge_discr_loss(fake, real):
     return (F.relu(1 + fake) + F.relu(1 - real)).mean()
@@ -26,6 +26,13 @@ def hinge_discr_loss(fake, real):
 
 def hinge_gen_loss(fake):
     return -fake.mean()
+
+
+def cos_sim_loss(logits, target):
+    logits = l2norm(logits)
+    target = l2norm(target)
+    loss = (1 - (logits * target).sum(-1)).mean()
+    return loss
 
 
 def gradient_penalty(images, output, weight=10):
@@ -102,7 +109,11 @@ class VQGANTrainer(nn.Module):
         
         self.discr = self.build_discr()
         
-        self.vgg = self.build_vgg()
+        self.vgg16 = self.build_vgg()
+        
+        precision = 'fp16' if mixed_precision == 'fp16' else 'fp32'
+        self.teacher_model = CLIPImageEmbedder(arch=vae.teacher_cfg['arch'], version=vae.teacher_cfg['version'], device=self.device, precision=precision)
+        self.teacher_model.freeze()
         
         train_size = len(dataset) - valid_size
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
@@ -111,13 +122,14 @@ class VQGANTrainer(nn.Module):
         self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
         self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
-        self.optim = torch.optim.Adam(self.vqvae.parameters(), lr=base_lr, betas=(0.5, 0.999))
-        self.discr_optim = torch.optim.Adam(self.discr.parameters(), lr=base_lr, betas=(0.5, 0.999))
+        self.optim = torch.optim.Adam(self.vqvae.parameters(), lr=base_lr)
+        self.discr_optim = torch.optim.Adam(self.discr.parameters(), lr=base_lr)
         
         self.rec_loss = F.l1_loss
         self.gen_loss = hinge_gen_loss
         self.discr_loss = hinge_discr_loss
         self.perceptual_loss = F.mse_loss
+        self.student_loss = cos_sim_loss
         
         (
             self.vqvae,
@@ -185,7 +197,7 @@ class VQGANTrainer(nn.Module):
                     
                     with self.accelerator.accumulate(self.vqvae):
                         with self.accelerator.autocast():
-                            rec, loss = self.vqvae(img)                          
+                            rec, loss, pool_feature = self.vqvae(img)                          
                             
                             # reconstruction loss
                             rec_loss = self.rec_loss(rec, img)
@@ -194,11 +206,15 @@ class VQGANTrainer(nn.Module):
                             gen_loss = self.gen_loss(self.discr(rec))
                             
                             # perceptual loss
-                            img_vgg_feats = self.vgg(img)
-                            rec_vgg_feats = self.vgg(rec)
+                            img_vgg_feats = self.vgg16(img)
+                            rec_vgg_feats = self.vgg16(rec)
                             perceptual_loss = self.perceptual_loss(img_vgg_feats, rec_vgg_feats)
                             
-                            loss = loss + rec_loss + gen_loss + perceptual_loss
+                            # clip as teacher
+                            target = self.teacher_model(img)
+                            student_loss = self.student_loss(pool_feature, target)
+                            
+                            loss = loss + rec_loss + gen_loss + perceptual_loss + student_loss
                             
                         self.accelerator.backward(loss)
                         
@@ -236,7 +252,15 @@ class VQGANTrainer(nn.Module):
                     if not (self.steps % self.save_every_n):
                         self.save()
                         
-                    log.update({'rec loss':rec_loss.item(), 'gen loss':gen_loss.item(), 'discr loss':discr_loss.item(), 'perce loss':perceptual_loss.item()})
+                    log.update(
+                        {
+                            'rec loss':rec_loss.item(), 
+                            'gen loss':gen_loss.item(), 
+                            'discr loss':discr_loss.item(), 
+                            'perce loss':perceptual_loss.item(), 
+                            'student loss':student_loss.item()
+                        }
+                    )
    
                     train_dl.set_postfix(
                         ordered_dict={
@@ -245,9 +269,19 @@ class VQGANTrainer(nn.Module):
                             "gen loss"        : log['gen loss'],
                             "discr loss"      : log['discr loss'],
                             "perceptual loss" : log['perce loss'],
+                            "student loss"    : log['student loss'],
                         }
                     )
-                    self.accelerator.log({"rec loss":log['rec loss'], "gen loss":log['gen loss'], "discr loss":log['discr loss'], "perceptual loss":log['perce loss']}, step=self.steps)
+                    self.accelerator.log(
+                        {
+                            "rec loss":log['rec loss'], 
+                            "gen loss":log['gen loss'], 
+                            "discr loss":log['discr loss'], 
+                            "perceptual loss":log['perce loss'], 
+                            "student loss":log['student loss']
+                        }, 
+                        step=self.steps
+                    )
         
         self.accelerator.end_training()        
         print("Train finished!")
@@ -267,7 +301,7 @@ class VQGANTrainer(nn.Module):
                 else:
                     img = batch
                 
-                rec, _ = self.vqvae(img)
+                rec, _, _ = self.vqvae(img)
                 
                 imgs_and_recs = torch.stack((img, rec), dim=0)
                 imgs_and_recs = rearrange(imgs_and_recs, 'r b ... -> (b r) ...')
