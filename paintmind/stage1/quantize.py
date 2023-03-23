@@ -42,6 +42,3 @@ class VectorQuantizer(nn.Module):
         z_q = l2norm(z_q)
         
         return z_q
-    
-
-

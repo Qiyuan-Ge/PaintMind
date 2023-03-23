@@ -7,8 +7,10 @@ from torch.utils.checkpoint import checkpoint
 # "ViT-H-14" "laion2b_s32b_b79k"
 # 'ViT-L-14', version='laion2b_s32b_b82k'
 
-CLIP_ARCH = 'ViT-H-14'
-CLIP_VERSION = 'laion2b_s32b_b79k'
+
+CLIP_ARCH = 'ViT-L-14'
+CLIP_VERSION = 'laion2b_s32b_b82k'
+
 
 class CLIPTextEmbedder(nn.Module):
     """
@@ -18,7 +20,7 @@ class CLIPTextEmbedder(nn.Module):
         "last",
         "penultimate"
     ]
-    def __init__(self, arch=CLIP_ARCH, version=CLIP_VERSION, device="cuda", max_length=77, layer="last", precision='fp32'):
+    def __init__(self, arch=CLIP_ARCH, version=CLIP_VERSION, device="cuda", max_length=77, layer="last", precision='fp32', freeze=True):
         super().__init__()
         assert layer in self.LAYERS
         model = open_clip.create_model(arch, device=device, pretrained=version, precision=precision)
@@ -35,6 +37,9 @@ class CLIPTextEmbedder(nn.Module):
             self.layer_idx = 1
         else:
             raise NotImplementedError()
+        
+        if freeze:
+            self.freeze()
 
     def freeze(self):
         self.model = self.model.eval()
@@ -55,7 +60,7 @@ class CLIPTextEmbedder(nn.Module):
         x = self.model.ln_final(x)
         return x
 
-    def text_transformer_forward(self, x: torch.Tensor, attn_mask = None):
+    def text_transformer_forward(self, x: torch.Tensor, attn_mask=None):
         for i, r in enumerate(self.model.transformer.resblocks):
             if i == len(self.model.transformer.resblocks) - self.layer_idx:
                 break
@@ -73,11 +78,14 @@ class CLIPImageEmbedder(nn.Module):
     """
     Uses the OpenCLIP transformer encoder for image
     """
-    def __init__(self, arch=CLIP_ARCH, version=CLIP_VERSION, device="cuda", precision='fp32'):
+    def __init__(self, arch=CLIP_ARCH, version=CLIP_VERSION, device="cuda", precision='fp32', freeze=True):
         super().__init__()
-        model, _, preprocess = open_clip.create_model_and_transforms(arch, pretrained=version, device=device, precision=precision)
+        model, _, _ = open_clip.create_model_and_transforms(arch, pretrained=version, device=device, precision=precision)
         self.model = model.visual
         self.device = device
+        
+        if freeze:
+            self.freeze()
         
     def freeze(self):
         self.model = self.model.eval()
@@ -89,9 +97,25 @@ class CLIPImageEmbedder(nn.Module):
         return x
 
     def forward(self, image):
-        image = self.preprocess(image)
-        z = self.model(image)
+        x = self.preprocess(image)
+        z = self.encode_with_transformer(x)
         return z
+    
+    def encode_with_transformer(self, x):
+        x = self.model.conv1(x)
+        x = x.reshape(x.shape[0], x.shape[1], -1)
+        x = x.permute(0, 2, 1)
+        
+        x = torch.cat([self.model.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)
+        x = x + self.model.positional_embedding.to(x.dtype)
+        x = self.model.ln_pre(x)
+        
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.model.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = x[:, 1:]
+        
+        return x
     
     def encode(self, image):
         return self(image)

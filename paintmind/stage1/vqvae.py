@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .module import Encoder, Decoder
+from .layers import Encoder, Decoder
 from .quantize import VectorQuantizer
-
 
 
 class VQVAE(nn.Module):
@@ -15,7 +13,6 @@ class VQVAE(nn.Module):
         self.embed_dim = config.embed_dim
         self.image_size = config.image_size
         self.patch_size = config.patch_size
-        self.teacher_cfg = config.teacher_cfg
         
         self.encoder = Encoder(config.image_size, config.patch_size, config.dim, config.depth, config.heads, config.mlp_dim, config.channels, config.dim_head, config.dropout)
         self.decoder = Decoder(config.image_size, config.patch_size, config.dim, config.depth, config.heads, config.mlp_dim, config.channels, config.dim_head, config.dropout)
@@ -28,26 +25,29 @@ class VQVAE(nn.Module):
             param.requires_grad = False
     
     def encode(self, x):
-        x, pool = self.encoder(x)
+        x = self.encoder(x)
         x = self.prev_quant(x)
         x, loss, indices = self.quantize(x)
-        return x, loss, indices, pool
+        return x, loss, indices
     
     def decode(self, x):
         x = self.post_quant(x)
         x = self.decoder(x)
         return x
     
+    def forward(self, img):
+        z, commit_loss, indices = self.encode(img)
+        rec = self.decode(z)
+
+        return rec, commit_loss
+    
+    def get_last_layer(self):
+        return self.decoder.proj[0].weight
+    
     def decode_from_indice(self, indice):
         z_q = self.quantize.decode_from_indice(indice)
         img = self.decode(z_q)
         return img
-    
-    def forward(self, img):
-        latent, commit_loss, indices, pool = self.encode(img)
-        rec = self.decode(latent)
-
-        return rec, commit_loss, pool
     
     def from_pretrained(self, path):
         return self.load_state_dict(torch.load(path))
