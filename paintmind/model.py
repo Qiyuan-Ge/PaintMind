@@ -7,7 +7,7 @@ import paintmind as pm
 from einops import rearrange
 from inspect import isfunction
 from tqdm.auto import tqdm
-from paintmind.stage1 import VQVAE
+from paintmind.stage1 import VQModel
 from paintmind.stage2 import MultiModalTransformer
 from paintmind.clip import CLIPTextEmbedder
 
@@ -43,7 +43,7 @@ class PaintMind(nn.Module):
     def __init__(self, config, vae_pretrained=None, clip_precision='fp32'):
         super().__init__()
         
-        self.vqvae = VQVAE(pm.Config(config.vae))
+        self.vqvae = VQModel(pm.Config(config.vae))
         if exists(vae_pretrained):
             self.vqvae.from_pretrained(vae_pretrained)
         self.vqvae.eval()

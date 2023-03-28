@@ -1,2 +1,1 @@
-from .vqvae import VQVAE
-from .discriminator import Discriminator
+from .vqmodel import VQModel

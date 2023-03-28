@@ -18,8 +18,8 @@ class VectorQuantizer(nn.Module):
     def forward(self, z):
         z = l2norm(z)
         z_flattened = z.view(-1, self.e_dim)
-        # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
         embedd_norm = l2norm(self.embedding.weight)
+        # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
 
         d = torch.sum(z_flattened**2, dim=1, keepdim=True) + \
             torch.sum(embedd_norm**2, dim=1) - 2 * \

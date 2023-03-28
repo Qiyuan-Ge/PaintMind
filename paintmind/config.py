@@ -1,6 +1,6 @@
 import json
 from copy import deepcopy
-from .stage1 import VQVAE
+from .stage1 import VQModel
 from .model import PaintMind
 
 
@@ -40,40 +40,44 @@ class Config:
         del self.__dict__
         
 
-vit_s_vqvae_config = {
+vit_s_vq_config = {
     'n_embed'     :8192,
     'embed_dim'   :32,
     'beta'        :0.25,
-    'image_size'  :256, 
-    'patch_size'  :16,
-    'dim'         :512,
-    'depth'       :8,
-    'heads'       :8,
-    'mlp_dim'     :2048,
-    'channels'    :3,
-    'dim_head'    :64, 
-    'dropout'     :0.1,
+    'encdec':{
+        'image_size':256, 
+        'patch_size':8, 
+        'dim':512, 
+        'depth':8, 
+        'heads':8, 
+        'mlp_dim':2048, 
+        'in_channels':3, 
+        'dim_head':64, 
+        'dropout':0.1,
+    }, 
 }
 
 
-vit_b_vqvae_config = {
+vit_b_vq_config = {
     'n_embed'     :8192,
     'embed_dim'   :32,
     'beta'        :0.25,
-    'image_size'  :256, 
-    'patch_size'  :16,
-    'dim'         :768,
-    'depth'       :8,
-    'heads'       :12,
-    'mlp_dim'     :3072,
-    'channels'    :3,
-    'dim_head'    :64, 
-    'dropout'     :0.1,
+    'encdec':{
+        'image_size':256, 
+        'patch_size':8, 
+        'dim':768, 
+        'depth':12, 
+        'heads':12, 
+        'mlp_dim':3072, 
+        'in_channels':3, 
+        'dim_head':64, 
+        'dropout':0.1,
+    }, 
 }
 
 
 paintmindv1_config = {
-    'vae'         :vit_s_vqvae_config,
+    'vae'         :vit_s_vq_config,
     'dim'         :768, 
     'dim_context' :1024, 
     'dim_head'    :64,
@@ -85,8 +89,8 @@ paintmindv1_config = {
 
 
 ver2cfg = {
-    'vit_s_vqvae'  : vit_s_vqvae_config,
-    'vit_b_vqvae'  : vit_b_vqvae_config,
+    'vit_s_vqvae'  : vit_s_vq_config,
+    'vit_b_vqvae'  : vit_b_vq_config,
     'paintmindv1'  : paintmindv1_config,
 }
 
@@ -96,8 +100,8 @@ def create_model(arch='paintmind', version='paintmindv1', pretrained=None, stage
 
     if arch == 'paintmind':
         model = PaintMind(config, vae_pretrained=stage1_pretrained, clip_precision=clip_precision)
-    elif arch == 'vqvae':
-        model = VQVAE(config)
+    elif arch == 'vqmodel':
+        model = VQModel(config)
     else:
         raise ValueError(f"failed to load arch named {arch}")
         

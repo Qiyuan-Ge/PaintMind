@@ -21,16 +21,13 @@ class Attention(nn.Module):
         inner_dim = dim_head * num_head
         dim_context = default(dim_context, dim)
         self.num_head = num_head
-        self.norm = nn.LayerNorm(dim)
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_k = nn.Linear(dim_context, inner_dim, bias=False)
         self.to_v = nn.Linear(dim_context, inner_dim, bias=False)
         self.attn_drop = nn.Dropout(p=dropout)
         self.to_o = nn.Linear(inner_dim, dim, bias=False)
-        self.proj_drop = nn.Dropout(p=dropout)
         
     def forward(self, x, context=None, mask=None):
-        x = self.norm(x)
         context = default(context, x)
         
         q = self.to_q(x)
@@ -50,7 +47,6 @@ class Attention(nn.Module):
         x = torch.einsum('b h i j, b h j d -> b h i d', attn, v)
         x = rearrange(x, 'b h n d -> b n (h d)')
         x = self.to_o(x)
-        x = self.proj_drop(x)
 
         return x
     
@@ -58,15 +54,12 @@ class Attention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, dim, mlp_dim, dropout=0.1):
         super().__init__()
-        self.norm = nn.LayerNorm(dim)
-        
         self.w_1 = nn.Linear(dim, mlp_dim)
         self.act = nn.GELU()
         self.dropout = nn.Dropout(p=dropout)
         self.w_2 = nn.Linear(mlp_dim, dim)
 
-    def forward(self, x):
-        x = self.norm(x)       
+    def forward(self, x):      
         x = self.w_1(x)
         x = self.act(x)
         x = self.dropout(x)
@@ -78,14 +71,17 @@ class FeedForward(nn.Module):
 class Layer(nn.Module):
     def __init__(self, dim, dim_head, mlp_dim, num_head=8, dropout=0.1, dim_context=None):
         super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
         self.attn1 = Attention(dim, dim_head, num_head, dropout)
+        self.norm2 = nn.LayerNorm(dim)
         self.attn2 = Attention(dim, dim_head, num_head, dropout, dim_context)
+        self.norm3 = nn.LayerNorm(dim)
         self.ffnet = FeedForward(dim, mlp_dim, dropout)
         
     def forward(self, x, context=None): 
-        x = self.attn1(x) + x
-        x = self.attn2(x, context) + x
-        x = self.ffnet(x) + x
+        x = self.attn1(self.norm1(x)) + x
+        x = self.attn2(self.norm2(x), context) + x
+        x = self.ffnet(self.norm3(x)) + x
 
         return x
     

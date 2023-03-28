@@ -9,15 +9,60 @@ from torch.utils.data import DataLoader, random_split
 from torchvision.utils import make_grid, save_image
 from tqdm.auto import tqdm
 from einops import rearrange
-from paintmind.stage1 import Discriminator
+from paintmind.utils.ppl import PerceptualLoss
 from paintmind.utils.lr_scheduler import build_scheduler
-from paintmind.utils.loss import hinge_g_loss, hinge_d_loss, PerceptualLoss
+from paintmind.stage1.discriminator import NLayerDiscriminator
+
+
+def requires_grad(model, flag=True):
+    for p in model.parameters():
+        p.requires_grad = flag
+
+
+# def d_logistic_loss(real_pred, fake_pred):
+#     real_loss = F.softplus(-real_pred)
+#     fake_loss = F.softplus(fake_pred)
+
+#     return 0.5 * (real_loss.mean() + fake_loss.mean())
+
+def log_laplace_loss(input, target):
+    diff = input - target
+    loss = torch.mean(torch.log(torch.abs(diff) + 1))
+    return loss
+
+
+def hinge_d_loss(fake, real):
+    loss_fake = torch.mean(F.relu(1. + fake))
+    loss_real = torch.mean(F.relu(1. - real))
+    d_loss = 0.5 * (loss_real + loss_fake)
+    return d_loss
+
+
+def g_nonsaturating_loss(fake_pred):
+    loss = F.softplus(-fake_pred).mean()
+
+    return loss
 
 
 def adopt_weight(weight, global_step, threshold=0, value=0.):
     if global_step < threshold:
         weight = value
     return weight
+
+
+def gradient_penalty(images, output, weight=10):
+
+    gradients = torch.autograd.grad(
+        outputs = output,
+        inputs = images,
+        grad_outputs = torch.ones(output.size(), device = images.device),
+        create_graph = True,
+        retain_graph = True,
+        only_inputs = True
+    )[0]
+
+    gradients = rearrange(gradients, 'b ... -> b (...)')
+    return weight * ((gradients.norm(2, dim = 1) - 1) ** 2).mean()
 
 
 class Log:
@@ -45,7 +90,7 @@ class Log:
 class VQGANTrainer(nn.Module):
     def __init__(
         self, 
-        vae,
+        vqvae,
         dataset,
         num_epoch,
         valid_size=32,
@@ -59,8 +104,8 @@ class VQGANTrainer(nn.Module):
         save_every=10000,
         sample_every=1000,
         result_folder=None,
-        discriminator_iter_start=10000, # 250001 in taming
         log_dir="./log",
+        discr_start_iter=6000,
     ):
         super().__init__()
         self.accelerator = Accelerator(
@@ -70,9 +115,9 @@ class VQGANTrainer(nn.Module):
             logging_dir=log_dir,
         )
 
-        self.vqvae = vae
+        self.vqvae = vqvae
         
-        self.discr = self.build_discr()
+        self.discr = NLayerDiscriminator(input_nc=3, ndf=64, n_layers=3).to(self.device)
         
         train_size = len(dataset) - valid_size
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
@@ -83,38 +128,37 @@ class VQGANTrainer(nn.Module):
         
         n_gpu = self.accelerator.num_processes
         lr = base_lr * batch_size * grad_accum_steps * n_gpu
-        self.optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.5, 0.9))
-        self.discr_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.5, 0.9))
+        self.g_optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.5, 0.9))
+        self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.5, 0.9))
         print(f"Setting learning rate to {lr} = {base_lr}(base_lr) * {batch_size}(bs) * {grad_accum_steps}(grad_accum_steps) * {n_gpu}(n_gpu)")
         
-        self.rec_loss = F.l1_loss
-        self.gen_loss = hinge_g_loss
-        self.dis_loss = hinge_d_loss
         self.per_loss = PerceptualLoss(device=self.device)
+        self.d_loss = hinge_d_loss
+        self.g_loss = g_nonsaturating_loss
+        self.d_factor = 0.2
+        self.p_factor = 0.5
+        self.discr_start_iter = discr_start_iter
         
         (
             self.vqvae,
             self.discr,
-            self.optim,
-            self.discr_optim,
+            self.g_optim,
+            self.d_optim,
             self.train_dl,
             self.valid_dl
         ) = self.accelerator.prepare(
             self.vqvae,
             self.discr,
-            self.optim,
-            self.discr_optim,
+            self.g_optim,
+            self.d_optim,
             self.train_dl,
             self.valid_dl
         )
         
         self.num_epoch = num_epoch
         self.save_every = save_every
-        self.sample_every = sample_every
+        self.samp_every = sample_every
         self.max_grad_norm = max_grad_norm
-        self.discr_weight = 0.8
-        self.discr_factor = 1.0
-        self.discr_iter_start = discriminator_iter_start
         
         self.model_saved_dir = os.path.join(result_folder, 'models')
         os.makedirs(self.model_saved_dir, exist_ok=True)
@@ -129,80 +173,11 @@ class VQGANTrainer(nn.Module):
     def device(self):
         return self.accelerator.device
     
-    def build_discr(self):
-        discr_layers = 4
-        dim=64
-        layer_mults = list(map(lambda t: 2 ** t, range(discr_layers)))
-        layer_dims = [dim * mult for mult in layer_mults]
-        dims = (dim, *layer_dims) 
-        discr = Discriminator(dims=dims, channels=self.vqvae.channels)
-        return discr
-    
-    def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
-        if last_layer is not None:
-            nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
-            g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
-        else:
-            nll_grads = torch.autograd.grad(nll_loss, self.last_layer[0], retain_graph=True)[0]
-            g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
-
-        d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
-        d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
-        d_weight = d_weight * self.discr_weight
-        return d_weight
-    
-    def generator_update(self, img):
-        with self.accelerator.accumulate(self.vqvae):
-            with self.accelerator.autocast():
-                rec, codebook_loss = self.vqvae(img)                       
-                # reconstruction loss
-                rec_loss = self.rec_loss(rec, img)
-                # perceptual loss
-                per_loss = self.per_loss(rec, img)
-                # generator loss
-                gen_loss = self.gen_loss(self.discr(rec))
-                # combine
-                nll_loss = rec_loss + per_loss
-                d_weight = self.calculate_adaptive_weight(nll_loss, gen_loss, last_layer=self.vqvae.get_last_layer())
-                discr_factor = adopt_weight(self.discr_factor, self.steps, threshold=self.discr_iter_start)
-                loss = codebook_loss + nll_loss + d_weight * discr_factor * gen_loss
-            self.accelerator.backward(loss)
-            if self.accelerator.sync_gradients:
-                self.accelerator.clip_grad_norm_(self.vqvae.parameters(), self.max_grad_norm)
-            self.optim.step()
-            self.optim.zero_grad()
-            
-            self.log.update(
-                {
-                    'rec loss' : rec_loss.item(),
-                    'per loss' : per_loss.item(), 
-                    'gen loss' : gen_loss.item(),
-                }
-            )
-        
-    def discriminator_update(self, img):
-        with self.accelerator.accumulate(self.discr):
-            with self.accelerator.autocast():
-                rec, _ = self.vqvae(img)
-                logits_fake = self.discr(rec.detach())
-                logits_real = self.discr(img.detach())
-                discr_factor = adopt_weight(self.discr_factor, self.steps, threshold=self.discr_iter_start)
-                d_loss = discr_factor * self.dis_loss(logits_fake, logits_real)
-            self.accelerator.backward(d_loss)
-            if self.accelerator.sync_gradients:
-                self.accelerator.clip_grad_norm_(self.discr.parameters(), self.max_grad_norm)
-            self.discr_optim.step()
-            self.discr_optim.zero_grad()
-            
-            self.log.update({'dis loss' : d_loss.item()})
-        
-    
     def train(self):
         self.steps = 0
         self.accelerator.init_trackers("vqgan")
         self.log = Log()
         for epoch in range(self.num_epoch):
-            self.vqvae.train()
             with tqdm(self.train_dl, dynamic_ncols=True, disable=not self.accelerator.is_main_process) as train_dl:
                 for batch in train_dl:
                     if isinstance(batch, tuple) or isinstance(batch, list):
@@ -210,16 +185,63 @@ class VQGANTrainer(nn.Module):
                     else:
                         img = batch
                     
-                    self.generator_update(img)
-                    
-                    self.discriminator_update(img)
+                    # discriminator part
+                    requires_grad(self.vqvae, False)
+                    requires_grad(self.discr, True)
+                    with self.accelerator.accumulate(self.discr):
+                        with self.accelerator.autocast():
+                            rec, _ = self.vqvae(img)
+                            
+                            fake_pred = self.discr(rec)
+                            real_pred = self.discr(img)
+                            
+                            d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
+                            d_loss = d_factor * self.d_loss(fake_pred, real_pred)
+                            
+                        self.accelerator.backward(d_loss)
+                        if self.accelerator.sync_gradients:
+                            self.accelerator.clip_grad_norm_(self.discr.parameters(), self.max_grad_norm)
+                        self.d_optim.step()
+                        self.d_optim.zero_grad()
+                        
+                        self.log.update({'d loss':d_loss.item()})
+                        
+                    # generator part
+                    requires_grad(self.vqvae, True)
+                    requires_grad(self.discr, False)
+                    with self.accelerator.accumulate(self.vqvae):
+                        with self.accelerator.autocast():
+                            rec, codebook_loss = self.vqvae(img)
+                            # reconstruction loss
+                            rec_loss = F.mse_loss(rec, img) + F.l1_loss(rec, img)
+                            # perceptual loss
+                            per_loss = self.p_factor * self.per_loss(rec, img)
+                            # gan loss
+                            d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
+                            g_loss = d_factor * self.g_loss(self.discr(rec))
+                            # combine
+                            loss = codebook_loss + rec_loss + per_loss + g_loss
+                        
+                        self.accelerator.backward(loss)
+                        if self.accelerator.sync_gradients:
+                            self.accelerator.clip_grad_norm_(self.vqvae.parameters(), self.max_grad_norm)
+                        self.g_optim.step()
+                        self.g_optim.zero_grad()   
+
+                        self.log.update(
+                            {
+                                'rec loss' : rec_loss.item(),
+                                'per loss' : per_loss.item(),
+                                'g loss'   : g_loss.item(),
+                            }
+                        )
                     
                     self.steps += 1
                     
                     if not (self.steps % self.save_every):
                         self.save()
                     
-                    if not (self.steps % self.sample_every):
+                    if not (self.steps % self.samp_every):
                         self.evaluate()
    
                     train_dl.set_postfix(
@@ -227,16 +249,16 @@ class VQGANTrainer(nn.Module):
                             "epoch"               : epoch,
                             "reconstruction loss" : self.log['rec loss'],
                             "perceptual loss"     : self.log['per loss'],
-                            "gen loss"            : self.log['gen loss'],
-                            "discr loss"          : self.log['dis loss'],
+                            "g_loss"              : self.log['g loss'],
+                            "d_loss"              : self.log['d loss'],
                         }
                     )
                     self.accelerator.log(
                         {
                             "reconstruction loss" : self.log['rec loss'], 
                             "perceptual loss"     : self.log['per loss'],
-                            "gen loss"            : self.log['gen loss'],
-                            "discr loss"          : self.log['dis loss'],
+                            "g_loss"              : self.log['g loss'],
+                            "d_loss"              : self.log['d loss'],
                         }, 
                         step=self.steps
                     )
@@ -247,7 +269,7 @@ class VQGANTrainer(nn.Module):
     def save(self):
         self.accelerator.wait_for_everyone()
         state_dict = self.accelerator.unwrap_model(self.vqvae).state_dict()
-        self.accelerator.save(state_dict, os.path.join(self.model_saved_dir, f'vit_vqvae_step_{self.steps}.pt'))
+        self.accelerator.save(state_dict, os.path.join(self.model_saved_dir, f'vit_vq_step_{self.steps}.pt'))
                                                        
     @torch.no_grad()
     def evaluate(self):
@@ -260,12 +282,11 @@ class VQGANTrainer(nn.Module):
                     img = batch
                 
                 rec, _ = self.vqvae(img)
-                
                 imgs_and_recs = torch.stack((img, rec), dim=0)
                 imgs_and_recs = rearrange(imgs_and_recs, 'r b ... -> (b r) ...')
                 imgs_and_recs = imgs_and_recs.detach().cpu().float()
                 
-                grid = make_grid(imgs_and_recs, nrow=4, normalize=True)
+                grid = make_grid(imgs_and_recs, nrow=4, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.vqvae.train()
 

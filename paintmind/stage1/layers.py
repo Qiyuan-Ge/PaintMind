@@ -8,30 +8,6 @@ def pair(t):
     return t if isinstance(t, tuple) else (t, t)
 
 
-class PatchEmbed(nn.Module):
-    """ 2D Image to Patch Embedding
-    """
-    def __init__(self, image_size=256, patch_size=8, channels=3, dim=768):
-        super().__init__()
-        image_size = pair(image_size)
-        patch_size = pair(patch_size)
-        
-        assert image_size[0] % patch_size[0] == 0 and image_size[1] % patch_size[1] == 0, 'Image dimensions must be divisible by the patch size.'
-
-        num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_patches = num_patches
-        
-        self.proj = nn.Conv2d(channels, dim, kernel_size=patch_size, stride=patch_size)
-
-    def forward(self, x):
-        x = self.proj(x)   
-        x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
-
-        return x
-
-
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
@@ -87,25 +63,45 @@ class Attention(nn.Module):
         return x
 
 
-class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+class LayerScale(nn.Module):
+    def __init__(self, dim, init_values=1e-5, inplace=False):
         super().__init__()
-        self.layers = nn.ModuleList([])
-        for _ in range(depth):
-            self.layers.append(nn.ModuleList([
-                PreNorm(dim, Attention(dim, heads=heads, dim_head=dim_head, dropout=dropout)),
-                PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
-            ]))
+        self.inplace = inplace
+        self.gamma = nn.Parameter(init_values * torch.ones(dim))
+
+    def forward(self, x):
+        return x.mul_(self.gamma) if self.inplace else x * self.gamma
+
+
+class Block(nn.Module):
+    def __init__(self, dim, heads, dim_head, mlp_dim, dropout=0., init_values=None):
+        super().__init__()
+        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.layer1 = PreNorm(dim, Attention(dim, heads=heads, dim_head=dim_head, dropout=dropout))
+        
+        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.layer2 = PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
+        
+    def forward(self, x):
+        x = x + self.ls1(self.layer1(x))
+        x = x + self.ls1(self.layer2(x))
+        
+        return x
+
+
+class Transformer(nn.Module):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0., init_values=None):
+        super().__init__()
+        self.layers = nn.Sequential(*[Block(dim, heads, dim_head, mlp_dim, dropout, init_values) for i in range(depth)])
     
     def forward(self, x):
-        for attn, ff in self.layers:
-            x = attn(x) + x
-            x = ff(x) + x
+        x = self.layers(x)
+        
         return x
 
 
 class Encoder(nn.Module):
-    def __init__(self, image_size, patch_size, dim, depth, heads, mlp_dim, channels=3, dim_head=64, dropout=0.):
+    def __init__(self, image_size, patch_size, dim, depth, heads, mlp_dim, in_channels=3, dim_head=64, dropout=0.):
         super().__init__()
         
         image_size = pair(image_size)
@@ -115,9 +111,14 @@ class Encoder(nn.Module):
 
         num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
         
-        self.to_patch_embedding = PatchEmbed(image_size, patch_size, channels, dim)
-        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim))
-        self.dropout = nn.Dropout(dropout)
+        self.to_patch_embedding = nn.Sequential(
+            nn.Conv2d(in_channels, dim, kernel_size=patch_size, stride=patch_size, bias=False),
+            Rearrange('b c h w -> b (h w) c'),
+        )
+
+        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * .02)
+        self.pos_drop = nn.Dropout(dropout)
+        self.norm_pre = nn.LayerNorm(dim)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
         
         self.initialize_weights()
@@ -137,14 +138,15 @@ class Encoder(nn.Module):
     def forward(self, x):
         x = self.to_patch_embedding(x)
         x += self.position_embedding
-        x = self.dropout(x)
+        x = self.pos_drop(x)
+        x = self.norm_pre(x)
         x = self.transformer(x)
         
         return x
  
        
 class Decoder(nn.Module):
-    def __init__(self, image_size, patch_size, dim, depth, heads, mlp_dim, channels=3, dim_head=64, dropout=0.):
+    def __init__(self, image_size, patch_size, dim, depth, heads, mlp_dim, in_channels=3, dim_head=64, dropout=0.):
         super().__init__()
         
         image_size = pair(image_size)
@@ -154,12 +156,17 @@ class Decoder(nn.Module):
 
         num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
 
-        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim))
+        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * .02)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
         self.norm = nn.LayerNorm(dim)
+        # self.proj = nn.Sequential(
+        #     nn.Linear(dim, in_channels * patch_size[0] * patch_size[1], bias=True),
+        #     Rearrange('b (h w) c -> b c h w', h=image_size[0]//patch_size[0]),
+        #     nn.PixelShuffle(patch_size[0]),
+        # )
         self.proj = nn.Sequential(
-            nn.Linear(dim, channels * patch_size[0] * patch_size[1], bias=True),
-            Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', h=image_size[0]//patch_size[0], w=image_size[1]//patch_size[1], p1=patch_size[0], p2=patch_size[1]),
+            nn.Linear(dim, in_channels * patch_size[0] * patch_size[1], bias=True),
+            Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', h=image_size[0]//patch_size[0], p1=patch_size[0], p2=patch_size[1]),
         )
         
         self.initialize_weights()
@@ -184,7 +191,13 @@ class Decoder(nn.Module):
 
         return x
         
-    
+# x = torch.randn(1, 3, 256, 256)
+# encoder = Encoder(256, 16, 512, 8, 8, 512, 3)
+# decoder = Decoder(256, 16, 512, 8, 8, 512, 3)
+# z = encoder(x)
+# print(z.shape)
+# y = decoder(z)
+# print(y.shape)
     
 
 
