@@ -3,13 +3,14 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
 from torch.utils.data import DataLoader, random_split
 from torchvision.utils import make_grid, save_image
 from tqdm.auto import tqdm
+from lpips import LPIPS
 from einops import rearrange
-from paintmind.utils.ppl import PerceptualLoss
 from paintmind.utils.lr_scheduler import build_scheduler
 from paintmind.stage1.discriminator import NLayerDiscriminator
 
@@ -19,18 +20,6 @@ def requires_grad(model, flag=True):
         p.requires_grad = flag
 
 
-# def d_logistic_loss(real_pred, fake_pred):
-#     real_loss = F.softplus(-real_pred)
-#     fake_loss = F.softplus(fake_pred)
-
-#     return 0.5 * (real_loss.mean() + fake_loss.mean())
-
-def log_laplace_loss(input, target):
-    diff = input - target
-    loss = torch.mean(torch.log(torch.abs(diff) + 1))
-    return loss
-
-
 def hinge_d_loss(fake, real):
     loss_fake = torch.mean(F.relu(1. + fake))
     loss_real = torch.mean(F.relu(1. - real))
@@ -38,8 +27,8 @@ def hinge_d_loss(fake, real):
     return d_loss
 
 
-def g_nonsaturating_loss(fake_pred):
-    loss = F.softplus(-fake_pred).mean()
+def g_nonsaturating_loss(fake):
+    loss = F.softplus(-fake).mean()
 
     return loss
 
@@ -48,21 +37,6 @@ def adopt_weight(weight, global_step, threshold=0, value=0.):
     if global_step < threshold:
         weight = value
     return weight
-
-
-def gradient_penalty(images, output, weight=10):
-
-    gradients = torch.autograd.grad(
-        outputs = output,
-        inputs = images,
-        grad_outputs = torch.ones(output.size(), device = images.device),
-        create_graph = True,
-        retain_graph = True,
-        only_inputs = True
-    )[0]
-
-    gradients = rearrange(gradients, 'b ... -> b (...)')
-    return weight * ((gradients.norm(2, dim = 1) - 1) ** 2).mean()
 
 
 class Log:
@@ -132,11 +106,14 @@ class VQGANTrainer(nn.Module):
         self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.5, 0.9))
         print(f"Setting learning rate to {lr} = {base_lr}(base_lr) * {batch_size}(bs) * {grad_accum_steps}(grad_accum_steps) * {n_gpu}(n_gpu)")
         
-        self.per_loss = PerceptualLoss(device=self.device)
+        self.per_loss = LPIPS(net='vgg').to(self.device).eval()
+        for param in self.per_loss.parameters():
+            param.requires_grad = False
         self.d_loss = hinge_d_loss
         self.g_loss = g_nonsaturating_loss
-        self.d_factor = 0.2
-        self.p_factor = 0.5
+        self.d_factor = 1.0
+        self.d_weight = 0.8
+        self.p_factor = 1.0
         self.discr_start_iter = discr_start_iter
         
         (
@@ -173,6 +150,37 @@ class VQGANTrainer(nn.Module):
     def device(self):
         return self.accelerator.device
     
+    def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
+        if last_layer is not None:
+            nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
+        else:
+            nll_grads = torch.autograd.grad(nll_loss, self.last_layer[0], retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
+
+        d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
+        d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
+        d_weight = d_weight * self.d_weight
+        return d_weight
+    
+    def calculate_gradient_penalty(self, real_images, fake_images, lambda_term=10):
+        eta = torch.FloatTensor(real_images.shape[0],1,1,1).uniform_(0,1).to(self.device)
+        eta = eta.expand(real_images.shape[0], real_images.size(1), real_images.size(2), real_images.size(3))
+        
+        interpolated = eta * real_images + ((1 - eta) * fake_images)
+        interpolated = Variable(interpolated, requires_grad=True)
+        prob_interpolated = self.discr(interpolated)
+        
+        gradients = torch.autograd.grad(
+            outputs=prob_interpolated, 
+            inputs=interpolated,
+            grad_outputs=torch.ones(prob_interpolated.size()).to(self.device),
+            create_graph=True, 
+            retain_graph=True,)[0]
+        
+        grad_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * lambda_term
+        return grad_penalty
+    
     def train(self):
         self.steps = 0
         self.accelerator.init_trackers("vqgan")
@@ -191,12 +199,13 @@ class VQGANTrainer(nn.Module):
                     with self.accelerator.accumulate(self.discr):
                         with self.accelerator.autocast():
                             rec, _ = self.vqvae(img)
-                            
+        
                             fake_pred = self.discr(rec)
                             real_pred = self.discr(img)
                             
                             d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
-                            d_loss = d_factor * self.d_loss(fake_pred, real_pred)
+                            gp = self.calculate_gradient_penalty(img, rec)
+                            d_loss = d_factor * (self.d_loss(fake_pred, real_pred) + gp)
                             
                         self.accelerator.backward(d_loss)
                         if self.accelerator.sync_gradients:
@@ -213,14 +222,17 @@ class VQGANTrainer(nn.Module):
                         with self.accelerator.autocast():
                             rec, codebook_loss = self.vqvae(img)
                             # reconstruction loss
-                            rec_loss = F.mse_loss(rec, img) + F.l1_loss(rec, img)
-                            # perceptual loss
-                            per_loss = self.p_factor * self.per_loss(rec, img)
+                            rec_loss = F.l1_loss(rec, img)
+                            # perception loss
+                            per_loss = self.per_loss(rec, img).mean()
+                            nll_loss = per_loss + rec_loss
                             # gan loss
+                            g_loss = self.g_loss(self.discr(rec))
                             d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
-                            g_loss = d_factor * self.g_loss(self.discr(rec))
+                            d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=self.vqvae.get_last_layer())
+                            g_loss = d_weight * d_factor * g_loss
                             # combine
-                            loss = codebook_loss + rec_loss + per_loss + g_loss
+                            loss = codebook_loss + nll_loss + g_loss
                         
                         self.accelerator.backward(loss)
                         if self.accelerator.sync_gradients:
