@@ -45,16 +45,15 @@ vit_s_vq_config = {
     'embed_dim'   :32,
     'beta'        :0.25,
     'encdec':{
-        'double_z': False, 
-        'z_channels': 256,
-        'resolution': 256,
-        'in_channels': 3,
-        'out_ch': 3,
-        'ch': 128,
-        'ch_mult': [1,1,2,2,4], # num_down = len(ch_mult)-1
-        'num_res_blocks': 2,
-        'attn_resolutions': [16],
-        'dropout': 0.0,
+        'image_size':256, 
+        'patch_size':8, 
+        'dim':512, 
+        'depth':8, 
+        'heads':8, 
+        'mlp_dim':2048, 
+        'in_channels':3, 
+        'dim_head':64, 
+        'dropout':0.1,
     }, 
 }
 
@@ -71,6 +70,7 @@ vit_b_vq_config = {
         'heads':12, 
         'mlp_dim':3072, 
         'in_channels':3, 
+        'out_channels':3,
         'dim_head':64, 
         'dropout':0.1,
     }, 
