@@ -4,12 +4,40 @@ import open_clip
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
+
 # "ViT-H-14" "laion2b_s32b_b79k"
-# 'ViT-L-14', version='laion2b_s32b_b82k'
+# "ViT-L-14" "laion2b_s32b_b82k"
 
 
 CLIP_ARCH = 'ViT-L-14'
 CLIP_VERSION = 'laion2b_s32b_b82k'
+
+
+class T5TextEmbedder(nn.Module):
+    def __init__(self, version="google/flan-t5-base", device="cuda", max_length=77, freeze=True):  
+        super().__init__()
+        self.tokenizer = T5Tokenizer.from_pretrained(version)
+        self.transformer = T5EncoderModel.from_pretrained(version)
+        self.device = device
+        self.max_length = max_length
+        if freeze:
+            self.freeze()
+
+    def freeze(self):
+        self.transformer = self.transformer.eval()
+        for param in self.parameters():
+            param.requires_grad = False
+
+    def forward(self, text):
+        batch_encoding = self.tokenizer(text, truncation=True, max_length=self.max_length, return_length=True,
+                                        return_overflowing_tokens=False, padding="max_length", return_tensors="pt")
+        tokens = batch_encoding["input_ids"].to(self.device)
+        outputs = self.transformer(input_ids=tokens)
+        z = outputs.last_hidden_state
+        return z
+
+    def encode(self, text):
+        return self(text)
 
 
 class CLIPTextEmbedder(nn.Module):
