@@ -9,7 +9,7 @@ from inspect import isfunction
 from tqdm.auto import tqdm
 from paintmind.stage1 import VQModel
 from paintmind.stage2 import MultiModalTransformer
-from paintmind.clip import CLIPTextEmbedder
+from paintmind.encoder import T5TextEmbedder
 
 
 def exists(x):
@@ -40,7 +40,7 @@ def gumbel_sample(t, temperature=1., dim=-1):
 
 
 class PaintMind(nn.Module):
-    def __init__(self, config, vae_pretrained=None, clip_precision='fp32'):
+    def __init__(self, config, vae_pretrained=None):
         super().__init__()
         
         self.vqvae = VQModel(pm.Config(config.vae))
@@ -49,9 +49,8 @@ class PaintMind(nn.Module):
         self.vqvae.eval()
         self.vqvae.freeze()
         
-        self.clip = CLIPTextEmbedder(precision=clip_precision)
-        self.clip.eval()
-        self.clip.freeze()
+        self.text_model = T5TextEmbedder()
+        self.text_model.freeze()
         
         self.num_token = (self.vqvae.image_size // self.vqvae.patch_size) ** 2
         
@@ -114,8 +113,7 @@ class PaintMind(nn.Module):
     def to_latent(self, img, text=None):
         x, _, indices = self.vqvae.encode(img)
         if exists(text):
-            text = self.clip(text)
-        
+            text = self.text_model(text)
         return x, indices, text
     
     def forward(self, img, text=None, mask_ratio=0.75):
@@ -139,15 +137,12 @@ class PaintMind(nn.Module):
         B = len(text)
         len_seq = self.num_token
         cur_seq = self.mask_token.repeat(B, len_seq, 1)
-        if exists(text):
-            text = self.clip(text)
+        text = self.text_model(text) if exists(text) else None
         for step in tqdm(range(timesteps)):
-            cur_temp = temperature*(1-step/timesteps)
-            
+            cur_temp = temperature*(1-step/timesteps) 
             logits = self.transformer(cur_seq, text)
             pred_ids = gumbel_sample(logits, temperature=cur_temp, dim=-1)
             pred_seq = self.vqvae.quantize.decode_from_indice(pred_ids)
-            
             img = self.vqvae.decode(pred_seq)
             if step % save_interval == 0:
                 imgs.append(img.cpu())           
