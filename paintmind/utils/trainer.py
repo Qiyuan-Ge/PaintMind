@@ -106,6 +106,7 @@ class VQGANTrainer(nn.Module):
         self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.5, 0.9))
         print(f"Setting learning rate to {lr} = {base_lr}(base_lr) * {batch_size}(bs) * {grad_accum_steps}(grad_accum_steps) * {n_gpu}(n_gpu)")
         
+        self.rec_loss = F.l1_loss
         self.per_loss = LPIPS(net='vgg').to(self.device).eval()
         for param in self.per_loss.parameters():
             param.requires_grad = False
@@ -113,7 +114,6 @@ class VQGANTrainer(nn.Module):
         self.g_loss = g_nonsaturating_loss
         self.d_factor = 1.0
         self.d_weight = 0.8
-        self.p_factor = 1.0
         self.discr_start_iter = discr_start_iter
         
         (
@@ -222,7 +222,7 @@ class VQGANTrainer(nn.Module):
                         with self.accelerator.autocast():
                             rec, codebook_loss = self.vqvae(img)
                             # reconstruction loss
-                            rec_loss = F.l1_loss(rec, img)
+                            rec_loss = self.rec_loss(rec, img)
                             # perception loss
                             per_loss = self.per_loss(rec, img).mean()
                             nll_loss = per_loss + rec_loss
