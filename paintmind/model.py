@@ -143,9 +143,11 @@ class PaintMind(nn.Module):
             logits = self.transformer(cur_seq, text)
             pred_ids = gumbel_sample(logits, temperature=cur_temp, dim=-1)
             pred_seq = self.vqvae.quantize.decode_from_indice(pred_ids)
-            img = self.vqvae.decode(pred_seq)
+            
             if step % save_interval == 0:
+                img = self.vqvae.decode(pred_seq)
                 imgs.append(img.cpu())           
+            
             # Fill the mask, ignore the unmasked.
             is_mask = (cur_seq == self.mask_token)
             cur_seq = torch.where(is_mask, pred_seq, cur_seq)            
