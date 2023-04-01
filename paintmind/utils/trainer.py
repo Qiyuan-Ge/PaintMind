@@ -240,13 +240,7 @@ class VQGANTrainer(nn.Module):
                         self.g_optim.step()
                         self.g_optim.zero_grad()   
 
-                        self.log.update(
-                            {
-                                'rec loss' : rec_loss.item(),
-                                'per loss' : per_loss.item(),
-                                'g loss'   : g_loss.item(),
-                            }
-                        )
+                        self.log.update({'rec loss':rec_loss.item(), 'per loss':per_loss.item(), 'g loss':g_loss.item()})
                     
                     self.steps += 1
                     
