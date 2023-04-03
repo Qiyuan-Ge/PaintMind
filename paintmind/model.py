@@ -9,7 +9,7 @@ from inspect import isfunction
 from tqdm.auto import tqdm
 from paintmind.stage1 import VQModel
 from paintmind.stage2 import MultiModalTransformer
-from paintmind.clip import CLIPTextEmbedder
+from paintmind.encoder import T5TextEmbedder
 
 
 def exists(x):
@@ -49,9 +49,7 @@ class PaintMind(nn.Module):
         self.vqvae.eval()
         self.vqvae.freeze()
         
-        self.clip = CLIPTextEmbedder(precision=clip_precision)
-        self.clip.eval()
-        self.clip.freeze()
+        self.text_model = CLIPTextEmbedder(freeze=True)
         
         self.num_token = (self.vqvae.image_size // self.vqvae.patch_size) ** 2
         
@@ -114,7 +112,7 @@ class PaintMind(nn.Module):
     def to_latent(self, img, text=None):
         x, _, indices = self.vqvae.encode(img)
         if exists(text):
-            text = self.clip(text)
+            text = self.text_model(text)
         
         return x, indices, text
     
@@ -139,8 +137,7 @@ class PaintMind(nn.Module):
         B = len(text)
         len_seq = self.num_token
         cur_seq = self.mask_token.repeat(B, len_seq, 1)
-        if exists(text):
-            text = self.clip(text)
+        text = self.text_model(text) if exists(text) else None
         for step in tqdm(range(timesteps)):
             cur_temp = temperature*(1-step/timesteps)
             
