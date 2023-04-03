@@ -46,7 +46,7 @@ vit_s_vq_config = {
     'beta'        :0.25,
     'encdec':{
         'image_size':256, 
-        'patch_size':8, 
+        'patch_size':16, 
         'dim':512, 
         'depth':8, 
         'heads':8, 
@@ -64,7 +64,7 @@ vit_b_vq_config = {
     'beta'        :0.25,
     'encdec':{
         'image_size':256, 
-        'patch_size':8, 
+        'patch_size':16, 
         'dim':768, 
         'depth':12, 
         'heads':12, 

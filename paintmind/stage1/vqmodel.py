@@ -42,9 +42,6 @@ class VQModel(nn.Module):
     def from_pretrained(self, path):
         return self.load_state_dict(torch.load(path))
     
-    def get_last_layer(self):
-        return self.decoder.conv_out.weight
-    
 
 
         

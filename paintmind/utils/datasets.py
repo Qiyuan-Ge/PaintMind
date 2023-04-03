@@ -3,6 +3,7 @@ import torch
 import zipfile
 import torchvision
 import numpy as np
+import pandas as pd
 from PIL import Image
 from datasets import load_dataset
 from pycocotools.coco import COCO
@@ -15,6 +16,29 @@ def unzip_file(zip_src, tgt_dir):
             fz.extract(file, tgt_dir)       
     else:
         raise RuntimeError("This is not zip file.")
+    
+
+class CoyoAesthetic:
+    def __init__(self, root, transform=None):
+        self.root = root
+        self.df = pd.read_parquet(os.path.join(root, 'coyo_aesthetic.parquet'))
+        self.transform = transform
+        
+    def __getitem__(self, idx):
+        fid = self.df['folder'][idx]
+        key = self.df['key'][idx]
+        img_path = f"{self.root}/{fid}/{key}.jpg"
+        img = Image.open(img_path)
+        
+        if self.transform is not None:
+            img = self.transform(img)
+        
+        caption = self.df['caption'][idx]
+        
+        return img, caption
+    
+    def __len__(self):
+        return len(self.df)
   
     
 class ImageNet:
@@ -42,13 +66,13 @@ class Flickr30k:
         self.transform = transform
         
     def __getitem__(self, idx):
-        image, captions = self.dataset[idx]
+        img, captions = self.dataset[idx]
         caption = np.random.choice(captions)
         
         if self.transform is not None:
-            image = self.transform(image)
+            img = self.transform(img)
             
-        return image, caption
+        return img, caption
     
     def __len__(self):
         return len(self.dataset)

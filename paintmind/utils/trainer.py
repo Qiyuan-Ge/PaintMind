@@ -150,19 +150,6 @@ class VQGANTrainer(nn.Module):
     def device(self):
         return self.accelerator.device
     
-    def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
-        if last_layer is not None:
-            nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
-            g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
-        else:
-            nll_grads = torch.autograd.grad(nll_loss, self.last_layer[0], retain_graph=True)[0]
-            g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
-
-        d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
-        d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
-        d_weight = d_weight * self.d_weight
-        return d_weight
-    
     def calculate_gradient_penalty(self, real_images, fake_images, lambda_term=10):
         eta = torch.FloatTensor(real_images.shape[0],1,1,1).uniform_(0,1).to(self.device)
         eta = eta.expand(real_images.shape[0], real_images.size(1), real_images.size(2), real_images.size(3))
@@ -198,7 +185,7 @@ class VQGANTrainer(nn.Module):
                     requires_grad(self.discr, True)
                     with self.accelerator.accumulate(self.discr):
                         with self.accelerator.autocast():
-                            rec, _ = self.vqvae(img)
+                            rec, codebook_loss = self.vqvae(img)
         
                             fake_pred = self.discr(rec)
                             real_pred = self.discr(img)
@@ -225,12 +212,10 @@ class VQGANTrainer(nn.Module):
                             rec_loss = self.rec_loss(rec, img)
                             # perception loss
                             per_loss = self.per_loss(rec, img).mean()
-                            nll_loss = per_loss + rec_loss
+                            nll_loss = rec_loss + per_loss
                             # gan loss
-                            g_loss = self.g_loss(self.discr(rec))
                             d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
-                            d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=self.vqvae.get_last_layer())
-                            g_loss = d_weight * d_factor * g_loss
+                            g_loss = self.d_weight * d_factor * self.g_loss(self.discr(rec))
                             # combine
                             loss = codebook_loss + nll_loss + g_loss
                         

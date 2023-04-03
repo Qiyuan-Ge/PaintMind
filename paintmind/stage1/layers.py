@@ -203,7 +203,7 @@ class Encoder(nn.Module):
  
        
 class Decoder(nn.Module):
-    def __init__(self, image_size, patch_size, dim, depth, heads, mlp_dim, in_channels=3, out_channels=3, dim_head=64, dropout=0., dims=[512, 256, 128]):
+    def __init__(self, image_size, patch_size, dim, depth, heads, mlp_dim, in_channels=3, out_channels=3, dim_head=64, dropout=0.):
         super().__init__()
         
         image_size = pair(image_size)
@@ -215,19 +215,11 @@ class Decoder(nn.Module):
 
         self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * .02)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
-        self.proj = Rearrange('b (h w) c -> b c h w', h=image_size[0]//patch_size[0])
-        
-        self.up = nn.ModuleList()
-        for i, ch in enumerate(dims):
-            in_ch = dims[i]
-            self.up.append(Upsample(dims[i]))
-            if i == len(dims)-1:
-                out_ch = in_ch
-            else:
-                out_ch = dims[i+1]
-            self.up.append(ResnetBlock(in_channels=in_ch, out_channels=out_ch, dropout=dropout))
-        self.norm_out = Normalize(dims[-1])
-        self.conv_out = nn.Conv2d(dims[-1], out_channels, kernel_size=3, stride=1, padding=1)
+        self.norm = nn.LayerNorm(dim)
+        self.proj = nn.Sequential(
+            nn.Linear(dim, out_channels * patch_size[0] * patch_size[1], bias=True),
+            Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', h=image_size[0]//patch_size[0], p1=patch_size[0], p2=patch_size[1]),
+        )
         
         self.initialize_weights()
 
@@ -246,11 +238,8 @@ class Decoder(nn.Module):
     def forward(self, x):
         x += self.position_embedding
         x = self.transformer(x)
+        x = self.norm(x)
         x = self.proj(x)
-        for layer in self.up:
-            x = layer(x)
-        x = self.norm_out(x)
-        x = self.conv_out(x)
         
         return x
         
