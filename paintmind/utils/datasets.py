@@ -28,7 +28,7 @@ class CoyoAesthetic:
         fid = self.df['folder'][idx]
         key = self.df['key'][idx]
         img_path = f"{self.root}/{fid}/{key}.jpg"
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert('RGB')
         
         if self.transform is not None:
             img = self.transform(img)
