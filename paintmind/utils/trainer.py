@@ -74,12 +74,12 @@ class VQGANTrainer(nn.Module):
         pin_memory=False,
         max_grad_norm=1.0,
         grad_accum_steps=1,
-        mixed_precision='fp16',
+        mixed_precision='bf16',
         save_every=10000,
         sample_every=1000,
         result_folder=None,
         log_dir="./log",
-        discr_start_iter=6000,
+        discr_start_iter=0,
     ):
         super().__init__()
         self.accelerator = Accelerator(
@@ -113,7 +113,7 @@ class VQGANTrainer(nn.Module):
         self.d_loss = hinge_d_loss
         self.g_loss = g_nonsaturating_loss
         self.d_factor = 1.0
-        self.d_weight = 0.8
+        self.d_weight = 0.1
         self.discr_start_iter = discr_start_iter
         
         (
