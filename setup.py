@@ -25,5 +25,6 @@ setup(
         'datasets',
         'sentencepiece',
         'open_clip_torch',
+        'transformers',
     ],
 )
