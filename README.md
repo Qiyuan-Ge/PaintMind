@@ -54,4 +54,4 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman-
 </div>
 
 ## Text2Image
-Soon Coming~~
+Not finish yet~~
