@@ -4,6 +4,7 @@ import requests
 import numpy as np
 import paintmind as pm
 from PIL import Image, ImageDraw, ImageFont
+from huggingface_hub import hf_hub_download
 
 def exists(x):
     return x is not None
@@ -20,17 +21,20 @@ def download_image(url):
     resp.raise_for_status()
     return Image.open(io.BytesIO(resp.content))
 
-def reconstuction(img_path=None, img_url=None, model_args=None, titles=['origin', 'reconstruct'], pretrained='./vit_vq_step_80000.pt', scale=0.8):
+def reconstruction(img_path=None, img_url=None, model_name='vit-s-vqgan', titles=['origin', 'reconstruct'], pretrained_path=None, scale=0.8):
     w, h = 256, 256
+    
     if exists(img_path):
         img = Image.open(img_path).convert('RGB')
     elif exists(img_url):
         img = download_image(img_url)
-    img = pm.stage1_transform(is_train=False, p=scale)(img)    
     
-    if not exists(model_args):
-        model_args = {'arch':'vqgan', 'version':'vit_s_vqgan'}
-    model = pm.create_model(arch=model_args['arch'], version=model_args['version'], pretrained=pretrained)
+    img = pm.stage1_transform(is_train=False, scale=scale)(img)    
+    
+    if not exists(pretrained_path):
+        pretrained_path = hf_hub_download("RootYuan/" + model_name, "vit_vqgan_step_90000.pt")
+    
+    model = pm.create_model(arch='vqgan', version=model_name, pretrained=pretrained_path)
     model.eval()
     with torch.no_grad():
         z, _, _ = model.encode(img.unsqueeze(0))
