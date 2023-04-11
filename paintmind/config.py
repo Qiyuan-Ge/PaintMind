@@ -40,7 +40,7 @@ class Config:
         del self.__dict__
         
 
-vit_s_vq_config = {
+vit_s_vqgan_config = {
     'n_embed'     :8192,
     'embed_dim'   :32,
     'beta'        :0.25,
@@ -58,7 +58,7 @@ vit_s_vq_config = {
 }
 
 
-vit_b_vq_config = {
+vit_b_vqgan_config = {
     'n_embed'     :8192,
     'embed_dim'   :32,
     'beta'        :0.25,
@@ -78,7 +78,7 @@ vit_b_vq_config = {
 
 
 pipeline_v1_config = {
-    'vae'         :vit_s_vq_config,
+    'vae'         :vit_s_vqgan_config,
     'dim'         :768, 
     'dim_context' :768, 
     'dim_head'    :64,
@@ -90,15 +90,15 @@ pipeline_v1_config = {
 
 
 ver2cfg = {
-    'vit_s_vqvae'  : vit_s_vq_config,
-    'vit_b_vqvae'  : vit_b_vq_config,
+    'vit_s_vqgan'  : vit_s_vqgan_config,
+    'vit_b_vqgan'  : vit_b_vqgan_config,
     'pipeline_v1'  : pipeline_v1_config,
 }
 
 
 def create_model(arch='pipeline', version='pipeline_v1', pretrained=None, stage1_pretrained=None):
     config = Config(config=ver2cfg[version])
-    if arch == 'vqmodel':
+    if arch == 'vqgan':
         model = VQModel(config)
     elif arch == 'pipeline':
         model = Pipeline(config, vae_pretrained=stage1_pretrained)
