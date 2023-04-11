@@ -57,16 +57,3 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman-
 
 ## Text2Image
 Soon Coming~~
-
-
-## Citation
-````
-@misc{paintmind,
-  author = {Qiyuan Ge},
-  title = {PaindMind},
-  year = {2023},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/Qiyuan-Ge/PaintMind}},
-}
-````
