@@ -96,8 +96,6 @@ class VQGANTrainer(nn.Module):
         self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
         self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
-        n_gpu = self.accelerator.num_processes
-        lr = base_lr * batch_size * grad_accum_steps * n_gpu
         self.g_optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.9, 0.99))
         self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.9, 0.99))
         self.g_sched = build_scheduler(self.g_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
