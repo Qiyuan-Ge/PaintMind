@@ -11,7 +11,17 @@ import paintmind as pm
 ````
 
 ## Reconstruction
-You could download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan
+````
+model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=True)
+img = Image.open(img_path).convert('RGB')
+img = pm.stage1_transform(is_train=False)(img)
+# encode image to latent
+z, _, _ = model.encode(img.unsqueeze(0))
+# decode latent to image
+rec = model.decode(z).squeeze(0)
+rec = torch.clamp(rec, -1., 1.)
+````
+You could also download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan
 
 #### 1.
 ````
