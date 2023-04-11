@@ -12,9 +12,10 @@ import paintmind as pm
 
 ## Reconstruction
 ````
-model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=True)
 img = Image.open(img_path).convert('RGB')
 img = pm.stage1_transform(is_train=False)(img)
+# load pretrained vit-vqgan
+model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=True)
 # encode image to latent
 z, _, _ = model.encode(img.unsqueeze(0))
 # decode latent to image
