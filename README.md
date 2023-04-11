@@ -60,6 +60,7 @@ Soon Coming~~
 
 
 ## Citation
+````
 @misc{paintmind,
   author = {Qiyuan Ge},
   title = {PaindMind},
@@ -68,3 +69,4 @@ Soon Coming~~
   journal = {GitHub repository},
   howpublished = {\url{https://github.com/Qiyuan-Ge/PaintMind}},
 }
+````
