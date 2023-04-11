@@ -11,7 +11,7 @@ import paintmind as pm
 ````
 
 ## Reconstruction
-You could download the pretrained vit-vqgan weight to local from https://huggingface.co/RootYuan/vit-s-vqgan
+You could download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan
 
 #### 1.
 ````
