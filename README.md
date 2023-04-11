@@ -53,7 +53,5 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman-
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_5.png?raw=true">
 </div>
 
-````
-
 ## Text2Image
 Soon Coming~~
