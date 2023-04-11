@@ -96,7 +96,7 @@ ver2cfg = {
 }
 
 
-def create_model(arch='pipeline', version='pipeline_v1', pretrained=None, stage1_pretrained=None):
+def create_model(arch='pipeline', version='pipeline-v1', pretrained=None, stage1_pretrained=None):
     config = Config(config=ver2cfg[version])
     if arch == 'vqgan':
         model = VQModel(config)
