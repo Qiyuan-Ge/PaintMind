@@ -4,8 +4,8 @@ import torchvision.transforms as T
 def pair(t):
     return t if isinstance(t, tuple) else (t, t)
 
-def stage1_transform(img_size=256, is_train=True, p=0.8):
-    resize = pair(int(img_size/p))
+def stage1_transform(img_size=256, is_train=True, scale=0.8):
+    resize = pair(int(img_size/scale))
     t = []
     t.append(T.Resize(resize, interpolation=PIL.Image.BICUBIC))
     if is_train:
@@ -19,8 +19,8 @@ def stage1_transform(img_size=256, is_train=True, p=0.8):
     
     return T.Compose(t)
         
-def stage2_transform(img_size=256, is_train=True, p=0.8):
-    resize = pair(int(img_size/p))
+def stage2_transform(img_size=256, is_train=True, scale=0.8):
+    resize = pair(int(img_size/scale))
     t = []
     t.append(T.Resize(resize, interpolation=PIL.Image.BICUBIC))
     if is_train:
