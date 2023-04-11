@@ -31,9 +31,10 @@ def reconstuction(img_path=None, img_url=None, model_args=None, titles=['origin'
     if not exists(model_args):
         model_args = {'arch':'vqgan', 'version':'vit_s_vqgan'}
     model = pm.create_model(arch=model_args['arch'], version=model_args['version'], pretrained=pretrained)
-    
-    z, _, _ = model.encode(img.unsqueeze(0))
-    rec = model.decode(z).squeeze(0)
+    model.eval()
+    with torch.no_grad():
+        z, _, _ = model.encode(img.unsqueeze(0))
+        rec = model.decode(z).squeeze(0)
     rec = torch.clamp(rec, -1., 1.)
     img = restore(img)
     rec = restore(rec)
