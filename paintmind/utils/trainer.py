@@ -33,12 +33,6 @@ def g_nonsaturating_loss(fake):
     return loss
 
 
-def adopt_weight(weight, global_step, threshold=0, value=0.):
-    if global_step < threshold:
-        weight = value
-    return weight
-
-
 class Log:
     def __init__(self):
         self.data = {}
@@ -68,7 +62,10 @@ class VQGANTrainer(nn.Module):
         dataset,
         num_epoch,
         valid_size=32,
-        base_lr=4.5e-6,
+        lr=1e-4,
+        lr_min=5e-5, 
+        warmup_steps=50000, 
+        warmup_lr_init=1e-6,
         batch_size=32,
         num_workers=0,
         pin_memory=False,
@@ -79,7 +76,6 @@ class VQGANTrainer(nn.Module):
         sample_every=1000,
         result_folder=None,
         log_dir="./log",
-        discr_start_iter=0,
     ):
         super().__init__()
         self.accelerator = Accelerator(
@@ -102,25 +98,25 @@ class VQGANTrainer(nn.Module):
         
         n_gpu = self.accelerator.num_processes
         lr = base_lr * batch_size * grad_accum_steps * n_gpu
-        self.g_optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.5, 0.9))
-        self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.5, 0.9))
-        print(f"Setting learning rate to {lr} = {base_lr}(base_lr) * {batch_size}(bs) * {grad_accum_steps}(grad_accum_steps) * {n_gpu}(n_gpu)")
+        self.g_optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.9, 0.99))
+        self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.9, 0.99))
+        self.g_sched = build_scheduler(self.g_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
+        self.d_sched = build_scheduler(self.d_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
         
-        self.rec_loss = F.l1_loss
         self.per_loss = LPIPS(net='vgg').to(self.device).eval()
         for param in self.per_loss.parameters():
             param.requires_grad = False
         self.d_loss = hinge_d_loss
         self.g_loss = g_nonsaturating_loss
-        self.d_factor = 1.0
         self.d_weight = 0.1
-        self.discr_start_iter = discr_start_iter
         
         (
             self.vqvae,
             self.discr,
             self.g_optim,
             self.d_optim,
+            self.g_sched,
+            self.d_sched,
             self.train_dl,
             self.valid_dl
         ) = self.accelerator.prepare(
@@ -128,6 +124,8 @@ class VQGANTrainer(nn.Module):
             self.discr,
             self.g_optim,
             self.d_optim,
+            self.g_sched,
+            self.d_sched,
             self.train_dl,
             self.valid_dl
         )
@@ -190,17 +188,17 @@ class VQGANTrainer(nn.Module):
                             fake_pred = self.discr(rec)
                             real_pred = self.discr(img)
                             
-                            d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
                             gp = self.calculate_gradient_penalty(img, rec)
-                            d_loss = d_factor * (self.d_loss(fake_pred, real_pred) + gp)
+                            d_loss = self.d_loss(fake_pred, real_pred) + gp
                             
                         self.accelerator.backward(d_loss)
                         if self.accelerator.sync_gradients:
                             self.accelerator.clip_grad_norm_(self.discr.parameters(), self.max_grad_norm)
                         self.d_optim.step()
+                        self.d_sched.step_update(self.steps)
                         self.d_optim.zero_grad()
                         
-                        self.log.update({'d loss':d_loss.item()})
+                        self.log.update({'d loss':d_loss.item(), 'd lr':self.d_optim.param_groups[0]['lr']})
                         
                     # generator part
                     requires_grad(self.vqvae, True)
@@ -209,24 +207,23 @@ class VQGANTrainer(nn.Module):
                         with self.accelerator.autocast():
                             rec, codebook_loss = self.vqvae(img)
                             # reconstruction loss
-                            rec_loss = self.rec_loss(rec, img)
+                            rec_loss = F.l1_loss(rec, img) + F.mse_loss(rec, img)
                             # perception loss
                             per_loss = self.per_loss(rec, img).mean()
-                            nll_loss = rec_loss + per_loss
                             # gan loss
-                            d_factor = adopt_weight(self.d_factor, self.steps, threshold=self.discr_start_iter)
-                            g_loss = self.d_weight * d_factor * self.g_loss(self.discr(rec))
+                            g_loss = self.g_loss(self.discr(rec))
                             # combine
-                            loss = codebook_loss + nll_loss + g_loss
+                            loss = codebook_loss + rec_loss + per_loss + self.d_weight * g_loss
                         
                         self.accelerator.backward(loss)
                         if self.accelerator.sync_gradients:
                             self.accelerator.clip_grad_norm_(self.vqvae.parameters(), self.max_grad_norm)
                         self.g_optim.step()
+                        self.g_sched.step_update(self.steps)
                         self.g_optim.zero_grad()   
 
                     self.steps += 1
-                    self.log.update({'rec loss':rec_loss.item(), 'per loss':per_loss.item(), 'g loss':g_loss.item()})
+                    self.log.update({'rec loss':rec_loss.item(), 'per loss':per_loss.item(), 'g loss':g_loss.item(), 'g lr':self.g_optim.param_groups[0]['lr']})
                     
                     if not (self.steps % self.save_every):
                         self.save()
@@ -237,7 +234,7 @@ class VQGANTrainer(nn.Module):
                     train_dl.set_postfix(
                         ordered_dict={
                             "epoch"               : epoch,
-                            "reconstruction loss" : self.log['rec loss'],
+                            "reconstruct loss"    : self.log['rec loss'],
                             "perceptual loss"     : self.log['per loss'],
                             "g_loss"              : self.log['g loss'],
                             "d_loss"              : self.log['d loss'],
@@ -245,10 +242,12 @@ class VQGANTrainer(nn.Module):
                     )
                     self.accelerator.log(
                         {
-                            "reconstruction loss" : self.log['rec loss'], 
+                            "reconstruct loss"    : self.log['rec loss'], 
                             "perceptual loss"     : self.log['per loss'],
                             "g_loss"              : self.log['g loss'],
                             "d_loss"              : self.log['d loss'],
+                            "g_lr"                : self.log['g lr'],
+                            "d_lr"                : self.log['d lr'],
                         }, 
                         step=self.steps
                     )
@@ -293,11 +292,11 @@ class PaintMindTrainer(nn.Module):
         dataset,
         num_epoch,
         valid_size=10,
-        base_lr=3e-4,
-        lr_min=3e-5,
-        warmup_steps=5000,
+        lr=1e-4,
+        lr_min=5e-5,
+        warmup_steps=50000,
+        warmup_lr_init=1e-6,
         weight_decay=0.05,
-        warmup_lr_init=1e-5,
         batch_size=32,
         num_workers=0,
         pin_memory=False,
@@ -327,7 +326,7 @@ class PaintMindTrainer(nn.Module):
         self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
-        self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=base_lr, weight_decay=weight_decay)
+        self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
         self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
         
         (
