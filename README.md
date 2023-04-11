@@ -11,6 +11,8 @@ import paintmind as pm
 ````
 
 ## Reconstruction
+You could download the pretrained vit-vqgan weight to local from https://huggingface.co/RootYuan/vit-s-vqgan
+
 #### 1.
 ````
 pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirrel-498139_960_720.jpg')
