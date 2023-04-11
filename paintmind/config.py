@@ -90,9 +90,9 @@ pipeline_v1_config = {
 
 
 ver2cfg = {
-    'vit_s_vqgan'  : vit_s_vqgan_config,
-    'vit_b_vqgan'  : vit_b_vqgan_config,
-    'pipeline_v1'  : pipeline_v1_config,
+    'vit-s-vqgan'  : vit_s_vqgan_config,
+    'vit-b-vqgan'  : vit_b_vqgan_config,
+    'pipeline-v1'  : pipeline_v1_config,
 }
 
 
