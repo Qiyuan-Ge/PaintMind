@@ -81,7 +81,7 @@ pipeline_v1_config = {
     'stage1_version' :'vit-s-vqgan',
     'vae'            :vit_s_vqgan_config,
     'dim'            :768, 
-    'dim_context'    :768, 
+    'dim_context'    :1024, 
     'dim_head'       :64,
     'mlp_dim'        :3072,
     'num_head'       :12, 
