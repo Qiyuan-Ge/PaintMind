@@ -78,11 +78,11 @@ vit_b_vqgan_config = {
 pipeline_v1_config = {
     'stage1'         :'vit-s-vqgan',
     'dim'            :768, 
-    'dim_context'    :1024, 
+    'dim_context'    :768, 
     'dim_head'       :64,
     'mlp_dim'        :3072,
     'num_head'       :12, 
-    'depth'          :8, 
+    'depth'          :10, 
     'dropout'        :0.1, 
 }
 
