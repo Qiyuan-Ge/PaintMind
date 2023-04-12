@@ -102,9 +102,8 @@ def create_pipeline_for_train(version='pipeline-v1', stage1_pretrained=True, sta
         if stage1_checkpoint_path is None:
             stage1_version = config.stage1_version
             stage1_checkpoint_path = hf_hub_download("RootYuan/" + stage1_version, f"{stage1_version}.pt")
-        model = Pipeline(config, vae_pretrained=stage1_checkpoint_path)
-    else:
-        model = Pipeline(config)
+    
+    model = Pipeline(config, vae_pretrained=stage1_checkpoint_path)
     
     return model
 
