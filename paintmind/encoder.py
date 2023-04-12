@@ -11,8 +11,8 @@ transformers.logging.set_verbosity_error()
 # "ViT-L-14" "laion2b_s32b_b82k"
 # "ViT-H-14" "laion2b_s32b_b79k"
 
-CLIP_ARCH = 'ViT-H-14'
-CLIP_VERSION = 'laion2b_s32b_b79k'
+CLIP_ARCH = 'ViT-L-14'
+CLIP_VERSION = 'laion2b_s32b_b82k'
 
 
 class T5TextEmbedder(nn.Module):
