@@ -7,7 +7,7 @@ import paintmind as pm
 from tqdm.auto import tqdm
 from einops import rearrange
 from inspect import isfunction
-from paintmind.stage1 import VQModel
+from paintmind.config import ver2cfg
 from paintmind.stage2 import CondTransformer
 from paintmind.encoder import CLIPTextEmbedder
 
@@ -40,24 +40,23 @@ def gumbel_sample(t, temperature=1., dim=-1):
 
 
 class Pipeline(nn.Module):
-    def __init__(self, config, vae_pretrained=None):
+    def __init__(self, config, stage1_pretrained=True):
         super().__init__()
         
-        self.vqvae = VQModel(pm.Config(config.vae))
-        if exists(vae_pretrained):
-            self.vqvae.from_pretrained(vae_pretrained)
+        self.vqvae = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained)
         self.vqvae.freeze()
         
         self.text_model = CLIPTextEmbedder(freeze=True)
         
-        self.num_tokens = (config.vae['encdec']['image_size'] // config.vae['encdec']['patch_size']) ** 2
+        vq_cfg = ver2cfg[config.stage1]
+        self.num_tokens = (vq_cfg['encdec']['image_size'] // vq_cfg['encdec']['patch_size']) ** 2
         
         self.transformer = CondTransformer(
-            config.vae['embed_dim'], config.dim, self.num_tokens, config.dim_head, config.mlp_dim, 
-            config.num_head, config.depth, config.dropout, config.dim_context, config.vae['n_embed'],
+            vq_cfg['embed_dim'], config.dim, self.num_tokens, config.dim_head, config.mlp_dim, 
+            config.num_head, config.depth, config.dropout, config.dim_context, vq_cfg['n_embed'],
         )
         
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, config.vae['embed_dim']))
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, vq_cfg['embed_dim']))
         nn.init.normal_(self.mask_token, std=.02)
         
     def from_pretrained(self, path):
