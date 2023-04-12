@@ -78,8 +78,7 @@ vit_b_vqgan_config = {
 
 
 pipeline_v1_config = {
-    'stage1_version' :'vit-s-vqgan',
-    'vae'            :vit_s_vqgan_config,
+    'stage1'         :'vit-s-vqgan',
     'dim'            :768, 
     'dim_context'    :1024, 
     'dim_head'       :64,
@@ -96,14 +95,9 @@ ver2cfg = {
     'pipeline-v1'  : pipeline_v1_config,
 }
 
-def create_pipeline_for_train(version='pipeline-v1', stage1_pretrained=True, stage1_checkpoint_path=None):
+def create_pipeline_for_train(version='pipeline-v1', stage1_pretrained=True):
     config = Config(config=ver2cfg[version])
-    if stage1_pretrained:
-        if stage1_checkpoint_path is None:
-            stage1_version = config.stage1_version
-            stage1_checkpoint_path = hf_hub_download("RootYuan/" + stage1_version, f"{stage1_version}.pt")
-    
-    model = Pipeline(config, vae_pretrained=stage1_checkpoint_path)
+    model = Pipeline(config, stage1_pretrained=stage1_pretrained)
     
     return model
 
