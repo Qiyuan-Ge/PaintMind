@@ -8,13 +8,11 @@ from transformers import T5Tokenizer, T5EncoderModel
 
 transformers.logging.set_verbosity_error()
 
-
-# "ViT-H-14" "laion2b_s32b_b79k"
 # "ViT-L-14" "laion2b_s32b_b82k"
+# "ViT-H-14" "laion2b_s32b_b79k"
 
-
-CLIP_ARCH = 'ViT-L-14'
-CLIP_VERSION = 'laion2b_s32b_b82k'
+CLIP_ARCH = 'ViT-H-14'
+CLIP_VERSION = 'laion2b_s32b_b79k'
 
 
 class T5TextEmbedder(nn.Module):
