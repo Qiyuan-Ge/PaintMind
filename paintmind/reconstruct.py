@@ -41,7 +41,10 @@ def reconstruction(img_path=None, img_url=None, model_name='vit-s-vqgan', titles
     fig = Image.new("RGB", (2*w, h))
     fig.paste(img, (0,0))
     fig.paste(rec, (1*w,0))
-    font = ImageFont.truetype('arialbi.ttf', 16)
+    try:
+        font = ImageFont.truetype('arialbi.ttf', 16)
+    except:
+        font = None
     for i, title in enumerate(titles):
         ImageDraw.Draw(fig).text((i*w, 0), f'{title}', (255, 255, 255), font=font)
         
