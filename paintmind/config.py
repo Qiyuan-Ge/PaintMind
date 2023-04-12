@@ -1,8 +1,5 @@
 import json
 from copy import deepcopy
-from .stage1 import VQModel
-from .pipeline import Pipeline
-from huggingface_hub import hf_hub_download
 
 class Config:
     def __init__(self, config=None):
