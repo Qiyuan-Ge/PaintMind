@@ -1,63 +1,10 @@
-import paintmind as pm
+from .config import *
 from .stage1 import VQModel
 from .pipeline import Pipeline
 from huggingface_hub import hf_hub_download
 
-vit_s_vqgan_config = {
-    'n_embed'     :8192,
-    'embed_dim'   :32,
-    'beta'        :0.25,
-    'encdec':{
-        'image_size':256, 
-        'patch_size':8, 
-        'dim':512, 
-        'depth':8, 
-        'heads':8, 
-        'mlp_dim':2048, 
-        'in_channels':3, 
-        'dim_head':64, 
-        'dropout':0.0,
-    }, 
-}
-
-vit_b_vqgan_config = {
-    'n_embed'     :8192,
-    'embed_dim'   :32,
-    'beta'        :0.25,
-    'encdec':{
-        'image_size':256, 
-        'patch_size':8, 
-        'dim':768, 
-        'depth':12, 
-        'heads':12, 
-        'mlp_dim':3072, 
-        'in_channels':3, 
-        'out_channels':3,
-        'dim_head':64, 
-        'dropout':0.1,
-    }, 
-}
-
-pipeline_v1_config = {
-    'stage1'         :'vit-s-vqgan',
-    'dim'            :768, 
-    'dim_context'    :1024, 
-    'dim_head'       :64,
-    'mlp_dim'        :3072,
-    'num_head'       :12, 
-    'depth'          :8, 
-    'dropout'        :0.1, 
-}
-
-ver2cfg = {
-    'vit-s-vqgan'  : vit_s_vqgan_config,
-    'vit-b-vqgan'  : vit_b_vqgan_config,
-    'pipeline-v1'  : pipeline_v1_config,
-}
-
-
 def create_model(arch='pipeline', version='pipeline-v1', pretrained=True, checkpoint_path=None):
-    config = pm.Config(config=ver2cfg[version])
+    config = Config(config=ver2cfg[version])
     
     if arch == 'vqgan':
         model = VQModel(config)
