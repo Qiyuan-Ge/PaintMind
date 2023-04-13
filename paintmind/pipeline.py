@@ -9,7 +9,7 @@ from einops import rearrange
 from inspect import isfunction
 from paintmind.config import ver2cfg
 from paintmind.stage2 import CondTransformer
-from paintmind.encoder import CLIPTextEmbedder
+from paintmind.encoder import T5TextEmbedder as TextEmbedder
 
 
 def exists(x):
@@ -46,7 +46,7 @@ class Pipeline(nn.Module):
         self.vqvae = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained)
         self.vqvae.freeze()
         
-        self.text_model = CLIPTextEmbedder(freeze=True)
+        self.text_model = TextEmbedder(freeze=True)
         
         vq_cfg = ver2cfg[config.stage1]
         self.num_tokens = (vq_cfg['encdec']['image_size'] // vq_cfg['encdec']['patch_size']) ** 2
