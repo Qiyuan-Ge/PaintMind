@@ -321,7 +321,7 @@ class PaintMindTrainer(nn.Module):
         print(f"train dataset size: {train_size}, valid dataset size: {valid_size}")
         
         self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
-        self.valid_dl = DataLoader(self.valid_ds, batch_size=6, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
+        self.valid_dl = DataLoader(self.valid_ds, batch_size=4, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
         self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
@@ -416,6 +416,6 @@ class PaintMindTrainer(nn.Module):
                 imgs_and_gens = torch.cat(imgs_and_gens, dim=0)
                 imgs_and_gens = imgs_and_gens.detach().cpu().float().clamp(-1., 1.)
                 
-                grid = make_grid(imgs_and_gens, nrow=6, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_gens, nrow=4, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.model.train()
