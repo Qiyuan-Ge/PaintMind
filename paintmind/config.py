@@ -79,7 +79,7 @@ pipeline_v1_config = {
     'dim_head'       :64,
     'mlp_dim'        :3072,
     'num_head'       :12, 
-    'depth'          :10, 
+    'depth'          :8,
     'dropout'        :0.1, 
 }
 
