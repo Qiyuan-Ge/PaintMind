@@ -78,10 +78,13 @@ class Pipeline(nn.Module):
         # sort noise for each sample
         ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
-
         # keep the first subset
         ids_keep = ids_shuffle[:, :len_keep]
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        x = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1]-x.shape[1], 1)
+        x = torch.cat([x, mask_tokens], dim=1)
+        # unshuffle
+        x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, D))  
 
         # generate the binary mask: 0 is keep, 1 is remove
         mask = torch.ones([N, L], device=x.device)
@@ -89,7 +92,7 @@ class Pipeline(nn.Module):
         # unshuffle to get the binary mask
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
-        return x_masked, mask, ids_restore
+        return x, mask
     
     def loss(self, logit, label, mask):
         """
@@ -118,10 +121,7 @@ class Pipeline(nn.Module):
         # stage1
         x, indices, text = self.to_latent(img, text)   
         # random mask
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
-        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1]-x.shape[1], 1)
-        x = torch.cat([x, mask_tokens], dim=1)
-        x = torch.gather(x, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x, mask = self.random_masking(x, mask_ratio)
         # stage2
         logits = self.transformer(x, text)
         # loss
