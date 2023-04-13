@@ -66,6 +66,7 @@ class VQGANTrainer(nn.Module):
         lr_min=5e-5, 
         warmup_steps=50000, 
         warmup_lr_init=1e-6,
+        decay_steps=100000,
         batch_size=32,
         num_workers=0,
         pin_memory=False,
@@ -98,8 +99,8 @@ class VQGANTrainer(nn.Module):
         
         self.g_optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.9, 0.99))
         self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.9, 0.99))
-        self.g_sched = build_scheduler(self.g_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
-        self.d_sched = build_scheduler(self.d_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
+        self.g_sched = build_scheduler(self.g_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
+        self.d_sched = build_scheduler(self.d_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
         self.per_loss = LPIPS(net='vgg').to(self.device).eval()
         for param in self.per_loss.parameters():
@@ -290,10 +291,11 @@ class PaintMindTrainer(nn.Module):
         dataset,
         num_epoch,
         valid_size=10,
-        lr=1e-4,
-        lr_min=5e-5,
-        warmup_steps=50000,
+        lr=6e-5,
+        lr_min=1e-5,
+        warmup_steps=5000,
         warmup_lr_init=1e-6,
+        decay_steps=80000,
         weight_decay=0.05,
         batch_size=32,
         num_workers=0,
@@ -325,7 +327,7 @@ class PaintMindTrainer(nn.Module):
         
         self.model = model
         self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
-        self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init)
+        self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
         (
             self.model,
