@@ -416,7 +416,7 @@ class PaintMindTrainer(nn.Module):
 
                 imgs_and_gens = [imgs.cpu()] + gens
                 imgs_and_gens = torch.cat(imgs_and_gens, dim=0)
-                imgs_and_gens = imgs_and_gens.detach().cpu().float().clamp(-1., 1.)
+                imgs_and_gens = imgs_and_gens.detach().cpu().float()
                 
                 grid = make_grid(imgs_and_gens, nrow=4, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
