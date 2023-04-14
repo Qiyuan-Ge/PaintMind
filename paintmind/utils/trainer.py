@@ -293,7 +293,7 @@ class PaintMindTrainer(nn.Module):
         dataset,
         num_epoch,
         valid_size=10,
-        optim='lion' # or 'adamw'
+        optim='lion', # or 'adamw'
         lr=6e-5,
         lr_min=1e-5,
         warmup_steps=5000,
