@@ -34,7 +34,6 @@ def reconstruction(img_path=None, img_url=None, model_name='vit-s-vqgan', titles
     with torch.no_grad():
         z, _, _ = model.encode(img.unsqueeze(0))
         rec = model.decode(z).squeeze(0)
-    rec = torch.clamp(rec, -1., 1.)
     img = restore(img)
     rec = restore(rec)
     
