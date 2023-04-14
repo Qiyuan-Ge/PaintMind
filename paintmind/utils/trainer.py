@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim import Adam, AdamW
 from torch.autograd import Variable
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
@@ -98,8 +99,8 @@ class VQGANTrainer(nn.Module):
         self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
         self.valid_dl = DataLoader(self.valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
-        self.g_optim = torch.optim.Adam(self.vqvae.parameters(), lr=lr, betas=(0.9, 0.99))
-        self.d_optim = torch.optim.Adam(self.discr.parameters(), lr=lr, betas=(0.9, 0.99))
+        self.g_optim = Adam(self.vqvae.parameters(), lr=lr, betas=(0.9, 0.99))
+        self.d_optim = Adam(self.discr.parameters(), lr=lr, betas=(0.9, 0.99))
         self.g_sched = build_scheduler(self.g_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         self.d_sched = build_scheduler(self.d_optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
@@ -292,6 +293,7 @@ class PaintMindTrainer(nn.Module):
         dataset,
         num_epoch,
         valid_size=10,
+        optim='lion' # or 'adamw'
         lr=6e-5,
         lr_min=1e-5,
         warmup_steps=5000,
@@ -327,8 +329,10 @@ class PaintMindTrainer(nn.Module):
         self.valid_dl = DataLoader(self.valid_ds, batch_size=4, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
-        self.optim = Lion([p for p in self.model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
-        #self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
+        if optim == 'lion':
+            self.optim = Lion([p for p in self.model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
+        else:
+            self.optim = AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
         self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
         (
