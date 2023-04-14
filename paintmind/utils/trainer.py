@@ -11,6 +11,7 @@ from torchvision.utils import make_grid, save_image
 from tqdm.auto import tqdm
 from lpips import LPIPS
 from einops import rearrange
+from paintmind.optim import Lion
 from paintmind.utils.lr_scheduler import build_scheduler
 from paintmind.stage1.discriminator import NLayerDiscriminator
 
@@ -326,7 +327,8 @@ class PaintMindTrainer(nn.Module):
         self.valid_dl = DataLoader(self.valid_ds, batch_size=4, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
-        self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
+        self.optim = Lion([p for p in self.model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
+        #self.optim = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
         self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
         (
