@@ -27,7 +27,7 @@ class VQModel(nn.Module):
     def decode(self, x):
         x = self.post_quant(x)
         x = self.decoder(x)
-        return x
+        return x.clamp(-1.0, 1.0)
     
     def forward(self, img):
         z, loss, indices = self.encode(img)
