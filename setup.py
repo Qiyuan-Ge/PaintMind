@@ -1,10 +1,11 @@
 from setuptools import setup, find_packages
 
 setup(
-    name = 'paintmind',
-    version = 0.0,
-    author = 'Qiyuan Ge',
-    author_email = '542801615@qq.com',
+    name='paintmind',
+    version='0.0.0',
+    author='Qiyuan Ge',
+    author_email='542801615@qq.com',
+    url='https://github.com/Qiyuan-Ge/PaintMind',
     keywords = [
         'artificial intelligence',
         'deep learning',
