@@ -9,7 +9,7 @@ from einops import rearrange
 from inspect import isfunction
 from paintmind.config import ver2cfg
 from paintmind.stage2 import CondTransformer
-from paintmind.encoder import T5TextEmbedder as TextEmbedder
+from paintmind.encoder import CLIPTextEmbedder as TextEmbedder
 
 
 def exists(x):
