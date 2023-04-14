@@ -144,7 +144,6 @@ class Pipeline(nn.Module):
             pred_seq = self.vqvae.quantize.decode_from_indice(pred_ids)
             if step % save_interval == 0:
                 img = self.vqvae.decode(pred_seq)
-                img = torch.clamp(img, -1., 1.)
                 imgs.append(img.cpu())           
             # Fill the mask, ignore the unmasked.
             is_mask = (cur_seq == self.mask_token)
