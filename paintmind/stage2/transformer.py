@@ -4,6 +4,15 @@ import torch.nn as nn
 from einops import rearrange
 from inspect import isfunction
 
+from typing import Optional, Any
+
+try:
+    import xformers
+    import xformers.ops
+    XFORMERS_IS_AVAILBLE = True
+except:
+    XFORMERS_IS_AVAILBLE = False
+
 
 def exists(x):
     return x is not None
@@ -15,17 +24,17 @@ def default(val, d):
     return d() if isfunction(d) else d
 
 
-class Attention(nn.Module):
-    def __init__(self, dim, dim_head=64, num_head=8, dropout=0.1, dim_context=None):
+class CrossAttention(nn.Module):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.0):
         super().__init__()
-        inner_dim = dim_head * num_head
-        dim_context = default(dim_context, dim)
-        self.num_head = num_head
-        self.to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.to_k = nn.Linear(dim_context, inner_dim, bias=False)
-        self.to_v = nn.Linear(dim_context, inner_dim, bias=False)
+        inner_dim = dim_head * heads
+        context_dim = default(context_dim, query_dim)
+        self.num_head = heads
+        self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
         self.attn_drop = nn.Dropout(p=dropout)
-        self.to_o = nn.Linear(inner_dim, dim, bias=False)
+        self.to_o = nn.Linear(inner_dim, query_dim)
         
     def forward(self, x, context=None, mask=None):
         context = default(context, x)
@@ -49,7 +58,56 @@ class Attention(nn.Module):
         x = self.to_o(x)
 
         return x
-    
+
+
+class MemoryEfficientCrossAttention(nn.Module):
+    # https://github.com/MatthieuTPHR/diffusers/blob/d80b531ff8060ec1ea982b65a1b8df70f73aa67c/src/diffusers/models/attention.py#L223
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.0):
+        super().__init__()
+        print(f"Setting up {self.__class__.__name__}. Query dim is {query_dim}, context_dim is {context_dim} and using "
+              f"{heads} heads.")
+        inner_dim = dim_head * heads
+        context_dim = default(context_dim, query_dim)
+
+        self.heads = heads
+        self.dim_head = dim_head
+
+        self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, query_dim), nn.Dropout(dropout))
+        self.attention_op: Optional[Any] = None
+
+    def forward(self, x, context=None, mask=None):
+        q = self.to_q(x)
+        context = default(context, x)
+        k = self.to_k(context)
+        v = self.to_v(context)
+
+        b, _, _ = q.shape
+        q, k, v = map(
+            lambda t: t.unsqueeze(3)
+            .reshape(b, t.shape[1], self.heads, self.dim_head)
+            .permute(0, 2, 1, 3)
+            .reshape(b * self.heads, t.shape[1], self.dim_head)
+            .contiguous(),
+            (q, k, v),
+        )
+
+        # actually compute the attention, what we cannot get enough of
+        out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None, op=self.attention_op)
+
+        if exists(mask):
+            raise NotImplementedError
+        out = (
+            out.unsqueeze(0)
+            .reshape(b, self.heads, out.shape[1], self.dim_head)
+            .permute(0, 2, 1, 3)
+            .reshape(b, out.shape[1], self.heads * self.dim_head)
+        )
+        return self.to_out(out)    
+  
     
 class FeedForward(nn.Module):
     def __init__(self, dim, mlp_dim, dropout=0.1):
@@ -69,12 +127,18 @@ class FeedForward(nn.Module):
     
 
 class Layer(nn.Module):
-    def __init__(self, dim, dim_head, mlp_dim, num_head=8, dropout=0.1, dim_context=None):
+    ATTENTION_MODES = {
+        "vanilla": CrossAttention,
+        "xformer": MemoryEfficientCrossAttention
+    }
+    def __init__(self, dim, dim_head, mlp_dim, num_head=8, dropout=0.0, dim_context=None):
         super().__init__()
+        attn_mode = "xformer" if XFORMERS_IS_AVAILBLE else "vanilla"
+        attn_cls = self.ATTENTION_MODES[attn_mode]
         self.norm1 = nn.LayerNorm(dim)
-        self.attn1 = Attention(dim, dim_head, num_head, dropout)
+        self.attn1 = attn_cls(query_dim=dim, heads=num_head, dim_head=dim_head, dropout=dropout)
         self.norm2 = nn.LayerNorm(dim)
-        self.attn2 = Attention(dim, dim_head, num_head, dropout, dim_context)
+        self.attn2 = attn_cls(query_dim=dim, context_dim=dim_context, heads=num_head, dim_head=dim_head, dropout=dropout)
         self.norm3 = nn.LayerNorm(dim)
         self.ffnet = FeedForward(dim, mlp_dim, dropout)
         
@@ -129,9 +193,3 @@ class CondTransformer(nn.Module):
         x = self.to_logits(x)
         
         return x
-    
-
-
-            
-            
-            
