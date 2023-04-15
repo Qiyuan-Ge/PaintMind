@@ -28,6 +28,40 @@ rec = torch.clamp(rec, -1., 1.)
 - You could also download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan
 - Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
 
+## Training
+````
+import paintmind as pm
+from paintmind.utils import datasets
+
+transforms = pm.stage1_transform(img_size=256, is_train=True, p=0.66)
+dataset1 = datasets.ImageNet(root=data1_path, transform=transforms)
+
+model = pm.create_model(arch='vqmodel', version='vit_s_vqvae', pretrained=False)
+
+trainer = pm.VQGANTrainer(
+    vqvae                    = model,
+    dataset                  = dataset,
+    num_epoch                = 400,
+    valid_size               = 32,
+    lr                       = 1e-4,
+    lr_min                   = 5e-5,
+    warmup_steps             = 50000,
+    warmup_lr_init           = 1e-6,
+    batch_size               = 2,
+    num_workers              = 2,
+    pin_memory               = False,
+    grad_accum_steps         = 8,
+    mixed_precision          = 'bf16',
+    max_grad_norm            = 1.0,
+    save_every               = 10000,
+    sample_every             = 5000,
+    result_folder            = res_path,
+    log_dir                  = "./log",
+)
+
+trainer.train()
+````
+
 #### 1.
 ````
 pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirrel-498139_960_720.jpg')
