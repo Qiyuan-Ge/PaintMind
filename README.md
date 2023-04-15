@@ -27,7 +27,7 @@ z, _, _ = model.encode(img.unsqueeze(0))
 rec = model.decode(z).squeeze(0)
 rec = torch.clamp(rec, -1., 1.)
 ````
-You could also download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan  
+You could also download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan  .
 To load the pretrained weights from local:
 ````
 model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=True, , checkpoint_path='your/model/path')
