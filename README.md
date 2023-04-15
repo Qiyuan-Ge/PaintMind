@@ -16,6 +16,7 @@ import paintmind as pm
 ## Reconstruction
 Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
 ### Usage
+if you set 'pretrained=True', the code will then try to downlaod the pretrained weights from huggingface.
 ````
 import paintmind as pm
 
@@ -68,7 +69,8 @@ trainer = pm.VQGANTrainer(
 )
 trainer.train()
 ````
-I train the vit-s-vqgan on 3M images with batchsize 16 for 200000 steps(constant learning rate, at first I don't use warmup and cosine lr decay).
+### Performance
+Below was the reconstruction ability of the vit-s-vqgan after training on 3M images with batchsize 16 and constant learning rate for 200000 steps. Because of limited time and computing resource, I only train the model for one eopch. The results was quite good, but the human face(especially the eyes) still need to be improved. By trying other techniques(warmup, cosine lr decay, larger batchsize, add more faces...). I'm sure there will be a better version in the future.
 #### 1.
 ````
 pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirrel-498139_960_720.jpg')
