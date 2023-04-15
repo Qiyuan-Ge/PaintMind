@@ -14,6 +14,8 @@ import paintmind as pm
 ````
 
 ## Reconstruction
+Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
+### Usage
 ````
 img = Image.open(img_path).convert('RGB')
 img = pm.stage1_transform(is_train=False)(img)
@@ -25,10 +27,13 @@ z, _, _ = model.encode(img.unsqueeze(0))
 rec = model.decode(z).squeeze(0)
 rec = torch.clamp(rec, -1., 1.)
 ````
-- You could also download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan
-- Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
+You could also download the weights of the pretrained vit-vqgan to local from https://huggingface.co/RootYuan/vit-s-vqgan
+To load the pretrained weights from local:
+````
+model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=True, , checkpoint_path='your/model/path')
+````
 
-## Training
+### Training
 ````
 import paintmind as pm
 from paintmind.utils import datasets
