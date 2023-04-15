@@ -17,6 +17,8 @@ import paintmind as pm
 Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
 ### Usage
 ````
+import paintmind as pm
+
 img = Image.open(img_path).convert('RGB')
 img = pm.stage1_transform(is_train=False)(img)
 # load pretrained vit-vqgan
@@ -32,41 +34,41 @@ To load the pretrained weights from local:
 ````
 model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=True, checkpoint_path='your/model/path')
 ````
-
 ### Training
 ````
 import paintmind as pm
 from paintmind.utils import datasets
 
-transforms = pm.stage1_transform(img_size=256, is_train=True, p=0.66)
-dataset1 = datasets.ImageNet(root=data1_path, transform=transforms)
+data_path = 'your/data/path'
+transform = pm.stage1_transform(img_size=256, is_train=True, scale=0.66)
+dataset = datasets.ImageNet(root=data_path, transform=transform) # or your own dataset
 
 model = pm.create_model(arch='vqmodel', version='vit_s_vqvae', pretrained=False)
 
 trainer = pm.VQGANTrainer(
     vqvae                    = model,
     dataset                  = dataset,
-    num_epoch                = 400,
-    valid_size               = 32,
+    num_epoch                = 100,
+    valid_size               = 64,
     lr                       = 1e-4,
     lr_min                   = 5e-5,
     warmup_steps             = 50000,
     warmup_lr_init           = 1e-6,
-    batch_size               = 2,
+    decay_steps              = 100000,
+    batch_size               = 16,
     num_workers              = 2,
-    pin_memory               = False,
+    pin_memory               = True,
     grad_accum_steps         = 8,
     mixed_precision          = 'bf16',
     max_grad_norm            = 1.0,
-    save_every               = 10000,
+    save_every               = 5000,
     sample_every             = 5000,
-    result_folder            = res_path,
-    log_dir                  = "./log",
+    result_folder            = "your/result/folder,
+    log_dir                  = "your/log/dir",
 )
-
 trainer.train()
 ````
-
+I train the vit-s-vqgan on 3M images with batchsize 16 for 200000 steps(constant learning rate, at first I don't use warmup and cosine lr decay).
 #### 1.
 ````
 pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirrel-498139_960_720.jpg')
