@@ -17,7 +17,7 @@ import paintmind as pm
 Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
 
 ### Usage
-if you set 'pretrained=True', the code will then try to downlaod the pretrained weights from huggingface.
+if you set 'pretrained=True', the code will then try to downlaod the pretrained weights.
 ````
 import paintmind as pm
 
