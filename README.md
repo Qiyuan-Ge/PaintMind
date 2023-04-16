@@ -74,7 +74,7 @@ trainer.train()
 Below was the reconstruction ability of the vit-s-vqgan after training on 3M images with batchsize 16 and constant learning rate for 200000 steps. Because of limited time and computing resource, I only train the model for one eopch. The results was quite good, but the human face(especially the eyes) still need to be improved. By trying other techniques(warmup, cosine lr decay, larger batchsize, add more faces...). I'll release a better version in the future.
 #### 1.
 ````
-pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirrel-498139_960_720.jpg')
+pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirrel-498139_960_720.jpg')
 ````
 <div align=center>
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_1.png?raw=true">
@@ -82,7 +82,7 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2014/10/22/15/47/squirr
 
 #### 2.
 ````
-pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/04/09/10/44/sea-shells-2215408_960_720.jpg')
+pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2017/04/09/10/44/sea-shells-2215408_960_720.jpg')
 ````
 <div align=center>
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_2.png?raw=true">
@@ -90,7 +90,7 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/04/09/10/44/sea-sh
 
 #### 3.
 ````
-pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2015/06/19/21/24/avenue-815297_960_720.jpg')
+pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2015/06/19/21/24/avenue-815297_960_720.jpg')
 ````
 <div align=center>
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_3.png?raw=true">
@@ -98,7 +98,7 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2015/06/19/21/24/avenue
 
 #### 4.
 ````
-pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/03/30/18/17/girl-2189247_960_720.jpg')
+pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2017/03/30/18/17/girl-2189247_960_720.jpg')
 ````
 <div align=center>
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_4.png?raw=true">
@@ -106,7 +106,7 @@ pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/03/30/18/17/girl-2
 
 #### 5.
 ````
-pm.reconstruction(img_url='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman-2896389_960_720.jpg')
+pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman-2896389_960_720.jpg')
 ````
 <div align=center>
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_5.png?raw=true">
