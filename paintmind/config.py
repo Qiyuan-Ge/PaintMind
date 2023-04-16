@@ -83,6 +83,17 @@ pipeline_v1_config = {
     'dropout'        :0.1, 
 }
 
+pipeline_v2_config = {
+    'stage1'         :'vit-s-vqgan',
+    'dim'            :1024, 
+    'dim_context'    :1024, 
+    'dim_head'       :64,
+    'mlp_dim'        :4096,
+    'num_head'       :16, 
+    'depth'          :24,
+    'dropout'        :0.1, 
+}
+
 ver2cfg = {
     'vit-s-vqgan'  : vit_s_vqgan_config,
     'vit-b-vqgan'  : vit_b_vqgan_config,
