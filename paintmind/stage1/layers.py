@@ -109,14 +109,14 @@ class Encoder(nn.Module):
 
         assert image_size[0] % patch_size[0] == 0 and image_size[1] % patch_size[1] == 0, 'Image dimensions must be divisible by the patch size.'
 
-        num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
-        
         self.to_patch_embedding = nn.Sequential(
             nn.Conv2d(in_channels, dim, kernel_size=patch_size, stride=patch_size, bias=False),
             Rearrange('b c h w -> b (h w) c'),
         )
-
-        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * .02)
+        
+        scale = dim ** -0.5
+        num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
+        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * scale)
         self.pos_drop = nn.Dropout(dropout)
         self.norm_pre = nn.LayerNorm(dim)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
@@ -154,9 +154,9 @@ class Decoder(nn.Module):
 
         assert image_size[0] % patch_size[0] == 0 and image_size[1] % patch_size[1] == 0, 'Image dimensions must be divisible by the patch size.'
 
+        scale = dim ** -0.5
         num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
-
-        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * .02)
+        self.position_embedding = nn.Parameter(torch.randn(1, num_patches, dim) * scale)
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
         self.norm = nn.LayerNorm(dim)
         self.proj = nn.Sequential(
@@ -185,15 +185,4 @@ class Decoder(nn.Module):
         x = self.proj(x)
         
         return x
-        
-# x = torch.randn(1, 3, 256, 256)
-# encoder = Encoder(256, 8, 512, 8, 8, 512, 3)
-# decoder = Decoder(256, 8, 512, 8, 8, 512, 3)
-# z = encoder(x)
-# print(z.shape)
-# y = decoder(z)
-# print(y.shape)
-# print(decoder)
-    
-
 
