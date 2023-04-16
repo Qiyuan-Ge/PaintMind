@@ -20,13 +20,13 @@ def download_image(url):
     resp.raise_for_status()
     return Image.open(io.BytesIO(resp.content))
 
-def reconstruction(img_path=None, img_url=None, model_name='vit-s-vqgan', titles=['origin', 'reconstruct'], checkpoint_path=None, scale=0.8):
+def reconstruction(img_path=None, model_name='vit-s-vqgan', titles=['origin', 'reconstruct'], checkpoint_path=None, scale=0.8):
     w, h = 256, 256
     
-    if exists(img_path):
+    if img_path.startswith('http'):
+        img = download_image(img_path)
+    else:
         img = Image.open(img_path).convert('RGB')
-    elif exists(img_url):
-        img = download_image(img_url)
     
     img = pm.stage1_transform(is_train=False, scale=scale)(img)    
     model = pm.create_model(arch='vqgan', version=model_name, pretrained=True, checkpoint_path=checkpoint_path)
