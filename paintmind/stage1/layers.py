@@ -137,7 +137,7 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         x = self.to_patch_embedding(x)
-        x += self.position_embedding
+        x = x + self.position_embedding
         x = self.pos_drop(x)
         x = self.norm_pre(x)
         x = self.transformer(x)
@@ -179,7 +179,7 @@ class Decoder(nn.Module):
             nn.init.constant_(m.weight, 1.0)
     
     def forward(self, x):
-        x += self.position_embedding
+        x = x + self.position_embedding
         x = self.transformer(x)
         x = self.norm(x)
         x = self.proj(x)
