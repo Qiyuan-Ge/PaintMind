@@ -59,7 +59,7 @@ vit_s_vqgan_config = {
         'depth':12, 
         'heads':12, 
         'mlp_dim':3072, 
-        'in_channels':3, 
+        'out_channels':3, 
         'dim_head':64, 
         'dropout':0.1,
     },     
