@@ -50,7 +50,7 @@ vit_s_vqgan_config = {
         'mlp_dim':2048, 
         'in_channels':3, 
         'dim_head':64, 
-        'dropout':0.0,
+        'dropout':0.1,
     }, 
     'dec':{
         'image_size':256, 
@@ -61,7 +61,7 @@ vit_s_vqgan_config = {
         'mlp_dim':3072, 
         'in_channels':3, 
         'dim_head':64, 
-        'dropout':0.0,
+        'dropout':0.1,
     },     
 }
 
