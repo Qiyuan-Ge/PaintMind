@@ -3,11 +3,9 @@
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/A_beautiful_girl_celebrating_her_birthday.png?raw=true" width="512">
 </div>
 
-````
-2023/4/19
+- 2023/4/19
 Note: Hi, I am preparing for a new release with better vitvqgan and generate model, 
 pretrained weights from old version will not be available.
-````
 
 ## Install
 ````
