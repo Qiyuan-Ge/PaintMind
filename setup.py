@@ -9,6 +9,7 @@ setup(
     keywords = [
         'artificial intelligence',
         'deep learning',
+        'text-to-image',
         'generate model',
     ],      
     packages = find_packages(),
@@ -16,7 +17,7 @@ setup(
         'einops',
         'numpy',
         'pillow',
-        'torch>=1.6',
+        'torch>=1.13',
         'torchvision',
         'lpips',
         'kornia',
