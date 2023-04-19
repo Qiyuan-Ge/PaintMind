@@ -5,8 +5,8 @@
 
 ````
 - 2023/4/19  
-Note: Hi, I am preparing for a new release with better vitvqgan and generate model, 
-pretrained weights from old version will not be available.
+Note: Hi, I am preparing for a new release with better vitvqgan and generate model, pretrained weights 
+      from old version will not be available.
 ````
 
 ## Install
