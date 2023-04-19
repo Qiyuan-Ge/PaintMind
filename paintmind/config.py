@@ -50,7 +50,7 @@ vit_s_vqgan_config = {
         'mlp_dim':2048, 
         'in_channels':3, 
         'dim_head':64, 
-        'dropout':0.1,
+        'dropout':0.0,
     }, 
     'dec':{
         'image_size':256, 
@@ -61,7 +61,7 @@ vit_s_vqgan_config = {
         'mlp_dim':3072, 
         'out_channels':3, 
         'dim_head':64, 
-        'dropout':0.1,
+        'dropout':0.0,
     },     
 }
 
@@ -83,12 +83,13 @@ pipeline_v2_config = {
     'dim_head'       :64,
     'mlp_dim'        :4096,
     'num_head'       :16, 
-    'depth'          :24,
+    'depth'          :12,
     'dropout'        :0.1, 
 }
 
 ver2cfg = {
     'vit-s-vqgan'  : vit_s_vqgan_config,
     'pipeline-v1'  : pipeline_v1_config,
+    'pipeline-v2'  : pipeline_v2_config,
 }
         
