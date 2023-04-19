@@ -3,6 +3,7 @@
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/A_beautiful_girl_celebrating_her_birthday.png?raw=true" width="512">
 </div>
 
+
 ````
 2023/4/19
 Note: Hi, I am preparing for a new release with better vitvqgan and generate model, 
@@ -19,9 +20,9 @@ pip install git+https://github.com/Qiyuan-Ge/PaintMind.git
 import paintmind as pm
 ````
 
+
 ## Reconstruction
 Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
-
 ### Usage
 if you set 'pretrained=True', the code will then try to downlaod the pretrained weights.
 ````
