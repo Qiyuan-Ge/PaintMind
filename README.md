@@ -3,12 +3,11 @@
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/A_beautiful_girl_celebrating_her_birthday.png?raw=true" width="512">
 </div>
 
-![badge](https://img.shields.io/badge/Framework-Pytorch-green?style=flat&logo=appveyor)
-![badge](https://img.shields.io/badge/Author-Qiyuan%20Ge-green?style=flat&logo=appveyor)
-![badge](https://img.shields.io/badge/Contact-542801615@qq.com-green?style=flat&logo=appveyor)
-![badge](https://img.shields.io/badge/License-Apache--2.0-green?style=flat&logo=appveyor)
-[![badge](https://img.shields.io/badge/Patreon-PaintMind-green?style=flat&logo=appveyor)](https://www.patreon.com/PaintMind79?fan_landing=true&view_as=public)
-
+<div align="center">
+  <img src="https://img.shields.io/badge/Framework-Pytorch-green?style=flat&logo=appveyor" alt="Badge 1">
+  <img src="https://img.shields.io/badge/License-Apache--2.0-green?style=flat&logo=appveyor" alt="Badge 2">
+  <img src="https://img.shields.io/badge/Contact-542801615@qq.com-green?style=flat&logo=appveyor" alt="Badge 3">
+</div>
 
 ````
 - 2023/4/19  
