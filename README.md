@@ -3,6 +3,7 @@
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/A_beautiful_girl_celebrating_her_birthday.png?raw=true" width="512">
 </div>
 
+![badge](https://img.shields.io/badge/Framework-Pytorch-green?style=flat&logo=appveyor)
 ![badge](https://img.shields.io/badge/Task-AI%20Generate%20Content-green?style=flat&logo=appveyor)
 ![badge](https://img.shields.io/badge/Author-Qiyuan%20Ge-green?style=flat&logo=appveyor)
 ![badge](https://img.shields.io/badge/Contact-542801615@qq.com-green?style=flat&logo=appveyor)
