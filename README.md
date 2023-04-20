@@ -4,7 +4,6 @@
 </div>
 
 ![badge](https://img.shields.io/badge/Framework-Pytorch-green?style=flat&logo=appveyor)
-![badge](https://img.shields.io/badge/Task-AIGC-green?style=flat&logo=appveyor)
 ![badge](https://img.shields.io/badge/Author-Qiyuan%20Ge-green?style=flat&logo=appveyor)
 ![badge](https://img.shields.io/badge/Contact-542801615@qq.com-green?style=flat&logo=appveyor)
 ![badge](https://img.shields.io/badge/License-Apache--2.0-green?style=flat&logo=appveyor)
