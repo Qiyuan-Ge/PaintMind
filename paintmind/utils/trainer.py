@@ -1,5 +1,6 @@
 import os
 import torch
+import random
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -323,16 +324,17 @@ class PaintMindTrainer(nn.Module):
         
         train_size = len(dataset) - valid_size
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
-        print(f"train dataset size: {train_size}, valid dataset size: {valid_size}")
         
         self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
         self.valid_dl = DataLoader(self.valid_ds, batch_size=4, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
+        
         if optim == 'lion':
             self.optim = Lion([p for p in self.model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
         else:
             self.optim = AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
+        
         self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
         (
@@ -353,6 +355,7 @@ class PaintMindTrainer(nn.Module):
         self.save_every = save_every
         self.sample_every = sample_every
         self.max_grad_norm = max_grad_norm
+        self.cfg_p = 0.1
         
         self.model_saved_dir = os.path.join(result_folder, 'models')
         os.makedirs(self.model_saved_dir, exist_ok=True)
@@ -362,6 +365,7 @@ class PaintMindTrainer(nn.Module):
         
         n_parameters = sum(p.numel() for p in self.parameters() if p.requires_grad)
         print(f'number of learnable parameters: {n_parameters//1e6}M')
+        print(f"train dataset size: {train_size}, valid dataset size: {valid_size}")
          
     def save(self):
         self.accelerator.wait_for_everyone()
@@ -373,11 +377,13 @@ class PaintMindTrainer(nn.Module):
         self.accelerator.init_trackers("paintmind")
         self.log = Log()
         for epoch in range(self.num_epoch):
-            self.model.train()
             with tqdm(self.train_dl, dynamic_ncols=True, disable=not self.accelerator.is_main_process) as train_dl:
                 for batch in train_dl:
                     with self.accelerator.accumulate(self.model):
                         imgs, text = batch
+                        
+                        if random.random() < self.cfg_p:
+                            text = None
                         
                         with self.accelerator.autocast():
                             loss = self.model(imgs, text, mask_ratio=masked_p_generator())                     
