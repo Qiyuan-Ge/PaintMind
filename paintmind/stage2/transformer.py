@@ -160,12 +160,12 @@ class Layer(nn.Module):
     
 
 class CondTransformer(nn.Module):
-    def __init__(self, in_dim, dim, len_seq, dim_head, mlp_dim, num_head=8, depth=6, dropout=0.1, dim_context=None, num_calsses=1000):
+    def __init__(self, in_dim, dim, len_seq, dim_head, mlp_dim, num_head=8, depth=6, dropout=0.1, context_dim=None, num_calsses=8192):
         super().__init__()
         self.proj = nn.Linear(in_dim, dim)
         self.position_embedding  = nn.Parameter(torch.randn(1, len_seq, dim))
         self.dropout = nn.Dropout(dropout)
-        self.context_proj = nn.Linear(dim_context, dim, bias=False) if dim_context != dim else nn.Identity()
+        self.context_proj = nn.Linear(context_dim, dim, bias=False) if context_dim != dim else nn.Identity()
         self.layers = nn.Sequential()
         for i in range(depth):
             self.layers.add_module("layer" + str(i), Layer(dim, dim_head, mlp_dim, num_head, dropout, dim))
