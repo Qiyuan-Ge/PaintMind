@@ -355,7 +355,6 @@ class PaintMindTrainer(nn.Module):
         self.save_every = save_every
         self.sample_every = sample_every
         self.max_grad_norm = max_grad_norm
-        self.cfg_p = 0.1
         
         self.model_saved_dir = os.path.join(result_folder, 'models')
         os.makedirs(self.model_saved_dir, exist_ok=True)
@@ -374,6 +373,7 @@ class PaintMindTrainer(nn.Module):
     
     def train(self):
         self.steps = 0
+        self.cfg_p = 0.1
         self.accelerator.init_trackers("paintmind")
         self.log = Log()
         for epoch in range(self.num_epoch):
@@ -381,7 +381,6 @@ class PaintMindTrainer(nn.Module):
                 for batch in train_dl:
                     with self.accelerator.accumulate(self.model):
                         imgs, text = batch
-                        
                         if random.random() < self.cfg_p:
                             text = None
                         
