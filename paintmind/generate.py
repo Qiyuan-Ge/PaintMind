@@ -142,7 +142,7 @@ class Pipeline(nn.Module):
         return loss
         
     @torch.no_grad()
-    def generate(self, text, timesteps=18, temperature=1.0, k=5, save_interval=2):
+    def generate(self, text, timesteps=18, temperature=1.0, topk=5, save_interval=2):
         B = len(text)
         len_seq = self.num_tokens
         imgs = []
@@ -155,9 +155,9 @@ class Pipeline(nn.Module):
         ids = torch.full((B, len_seq), self.mask_token_id, dtype=torch.long, device=self.mask_token.device)
         for step in tqdm(range(timesteps)):
             logits = self.token_to_logits(emb(ids), text)
-            filtered_logits = top_k(logits, k)
-            temp = temperature*(1-step/timesteps)
-            pred_ids = gumbel_sample(filtered_logits, temperature=temp, dim=-1)
+            filtered_logits = top_k(logits, topk)
+            cur_temp = temperature*(1-step/timesteps)
+            pred_ids = gumbel_sample(filtered_logits, temperature=cur_temp, dim=-1)
             is_mask = ids == self.mask_token_id
             # Fill the mask, ignore the unmasked.
             ids = torch.where(is_mask, pred_ids, ids)
