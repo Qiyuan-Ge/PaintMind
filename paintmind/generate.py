@@ -50,7 +50,7 @@ class Pipeline(nn.Module):
     def __init__(self, config, stage1_pretrained=True):
         super().__init__()
         clip_version = {'ViT-L-14':'laion2b_s32b_b82k', 'ViT-H-14':'laion2b_s32b_b79k'}
-        dim_context = {'ViT-L-14':768, 'ViT-H-14':1024}
+        context_dim = {'ViT-L-14':768, 'ViT-H-14':1024}
         
         self.vqgan = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained)
         self.vqgan.freeze()
@@ -62,7 +62,7 @@ class Pipeline(nn.Module):
         
         self.transformer = CondTransformer(
             vq_cfg['embed_dim'], config.dim, self.num_tokens, config.dim_head, config.mlp_dim, 
-            config.num_head, config.depth, config.dropout, dim_context[config.clip], vq_cfg['n_embed'],
+            config.num_head, config.depth, config.dropout, context_dim[config.clip], vq_cfg['n_embed'],
         )
         
         self.mask_token = nn.Parameter(torch.zeros(1, vq_cfg['embed_dim']))
