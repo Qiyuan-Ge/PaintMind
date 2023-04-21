@@ -67,29 +67,17 @@ vit_s_vqgan_config = {
 
 pipeline_v1_config = {
     'stage1'         :'vit-s-vqgan',
-    'clip'           :'ViT-L-14',
-    'dim'            :768, 
-    'dim_head'       :64,
-    'mlp_dim'        :3072,
-    'num_head'       :12, 
-    'depth'          :12,
-    'dropout'        :0.1, 
-}
-
-pipeline_v2_config = {
-    'stage1'         :'vit-s-vqgan',
     'clip'           :'ViT-H-14',
     'dim'            :1024, 
     'dim_head'       :64,
     'mlp_dim'        :4096,
     'num_head'       :16, 
-    'depth'          :12,
+    'depth'          :24,
     'dropout'        :0.1, 
 }
 
 ver2cfg = {
     'vit-s-vqgan'  : vit_s_vqgan_config,
     'paintmindv1'  : pipeline_v1_config,
-    'paintmindv2'  : pipeline_v2_config,
 }
         
