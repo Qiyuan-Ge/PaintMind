@@ -56,7 +56,7 @@ data_path = 'your/data/path'
 transform = pm.stage1_transform(img_size=256, is_train=True, scale=0.66)
 dataset = datasets.ImageNet(root=data_path, transform=transform) # or your own dataset
 
-model = pm.create_model(arch='vqmodel', version='vit_s_vqvae', pretrained=False)
+model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=False)
 
 trainer = pm.VQGANTrainer(
     vqvae                    = model,
