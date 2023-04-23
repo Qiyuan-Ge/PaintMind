@@ -332,8 +332,10 @@ class PaintMindTrainer(nn.Module):
         
         if optim == 'lion':
             self.optim = Lion([p for p in self.model.parameters() if p.requires_grad], lr=lr, weight_decay=weight_decay)
-        else:
+        elif optim == 'adamw':
             self.optim = AdamW([p for p in self.model.parameters() if p.requires_grad], lr=lr, betas=(0.9, 0.96), weight_decay=weight_decay)
+        else:
+            raise NotImplementedError
         
         self.scheduler = build_scheduler(self.optim, num_epoch, len(self.train_dl), lr_min, warmup_steps, warmup_lr_init, decay_steps)
         
@@ -423,7 +425,7 @@ class PaintMindTrainer(nn.Module):
                 imgs, text = batch
 
                 with self.accelerator.autocast():
-                    gens = self.model.generate(text=text, timesteps=18, temperature=1.0, save_interval=2)
+                    gens = self.model.generate(text=text, timesteps=18, temperature=1.0, topk=5, save_interval=2)
 
                 imgs_and_gens = [imgs.cpu()] + gens
                 imgs_and_gens = torch.cat(imgs_and_gens, dim=0)
