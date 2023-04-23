@@ -181,7 +181,7 @@ class Pipeline(nn.Module):
         imgs = []
         
         text = self.text_model(text)
-        ids = torch.full((B, len_seq), self.mask_token_id, dtype=torch.long, device=self.mask_token.device)
+        ids = torch.full((B, self.num_tokens), self.mask_token_id, dtype=torch.long, device=self.mask_token.device)
         for step in tqdm(range(timesteps)):
             progress = (step + 1) / timesteps
             mask_ratio = mask_schedule(progress)
