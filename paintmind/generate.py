@@ -140,44 +140,71 @@ class Pipeline(nn.Module):
         loss = self.loss(logits, indices, mask)
 
         return loss
+    
+    @torch.no_grad()
+    def ids2tokens(self, ids):
+        cat = torch.cat((self.vqgan.quantize.embedding.weight, self.mask_token))
+        emb = nn.Embedding(self.num_tokens, self.mask_token.shape[-1]).from_pretrained(cat)
+        tokens = emb(ids)
+        
+        return tokens
+    
+    @torch.no_grad()
+    def sample(self, ids, mask_ratio, text=None, topk=1, temperature=1):
+        tokens = self.ids2tokens(ids)
+        logits = self.token_to_logits(tokens, text)
+        filtered_logits = top_k(logits, topk)
+        pred_ids = gumbel_sample(filtered_logits, temperature=temperature, dim=-1)
+        is_mask = ids == self.mask_token_id
+        # Fill the mask, ignore the unmasked.
+        ids = torch.where(is_mask, pred_ids, ids)
+        img = self.vqgan.decode_from_indice(ids)
+        
+        probs = logits.softmax(dim=-1)
+        scores = 1 - probs.gather(2, pred_ids[..., None])
+        scores = rearrange(scores, '... 1 -> ...')
+        scores = scores.masked_fill(~is_mask, -1e5)
+
+        num_token_masked = max(int((mask_ratio * self.num_tokens).item()), 1)
+
+        masked_indices = scores.topk(num_token_masked, dim=-1).indices
+
+        ids = ids.scatter(1, masked_indices, self.mask_token_id)
+        
+        return ids, img
         
     @torch.no_grad()
     def generate(self, text, timesteps=18, temperature=1.0, topk=5, save_interval=2):
         B = len(text)
-        len_seq = self.num_tokens
         imgs = []
         
         text = self.text_model(text)
-        
-        cat = torch.cat((self.vqgan.quantize.embedding.weight, self.mask_token))
-        emb = nn.Embedding(len_seq, self.mask_token.shape[-1]).from_pretrained(cat)
-        
         ids = torch.full((B, len_seq), self.mask_token_id, dtype=torch.long, device=self.mask_token.device)
         for step in tqdm(range(timesteps)):
-            logits = self.token_to_logits(emb(ids), text)
-            filtered_logits = top_k(logits, topk)
-            cur_temp = temperature*(1-step/timesteps)
-            pred_ids = gumbel_sample(filtered_logits, temperature=cur_temp, dim=-1)
-            is_mask = ids == self.mask_token_id
-            # Fill the mask, ignore the unmasked.
-            ids = torch.where(is_mask, pred_ids, ids)
-            
-            if step % save_interval == 0:
-                img = self.vqgan.decode_from_indice(ids)
-                imgs.append(img.cpu())
-                
-            probs = logits.softmax(dim=-1)
-            scores = 1 - probs.gather(2, pred_ids[..., None])
-            scores = rearrange(scores, '... 1 -> ...')
-            scores = scores.masked_fill(~is_mask, -1e5)
-            
             progress = (step + 1) / timesteps
             mask_ratio = mask_schedule(progress)
-            num_token_masked = max(int((mask_ratio * len_seq).item()), 1)
-            
-            masked_indices = scores.topk(num_token_masked, dim=-1).indices
-            
-            ids = ids.scatter(1, masked_indices, self.mask_token_id)
+            ids, img = self.sample(ids, mask_ratio=mask_ratio, text=text, topk=topk, temperature=temperature)
+            if step % save_interval == 0:
+                imgs.append(img.cpu())
         
         return imgs
+    
+    @torch.no_grad()
+    def inpaint(self, img, loc, text=None, timesteps=1, topk=1, temperature=0):
+        z, ids, text = self.to_latent(img, text)
+        
+        s = self.patch_size
+        x, y, h, w = loc[0]//s, loc[1]//s, loc[2]//s, loc[3]//s
+        mask = torch.ones(self.image_size//s, self.image_size//s).unsqueeze(0).to(z.device)
+        mask[:, y:y+h, x:x+w] = 0
+        mask = mask.reshape(1, -1)
+        
+        ids = ids * mask + self.mask_token_id * (1 - mask)
+        for step in tqdm(range(timesteps)):
+            progress = (step + 1) / timesteps
+            mask_ratio = mask_schedule(progress)
+            ids, img = self.sample(ids, mask_ratio=mask_ratio, text=text, topk=topk, temperature=temperature)
+            
+        return img
+            
             
