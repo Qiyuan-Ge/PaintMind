@@ -47,12 +47,12 @@ def gumbel_sample(t, temperature=1., dim=-1):
 
 
 class Pipeline(nn.Module):
-    def __init__(self, config, stage1_pretrained=True):
+    def __init__(self, config, stage1_pretrained=True, stage1_checkpoint_path=None):
         super().__init__()
         clip_version = {'ViT-L-14':'laion2b_s32b_b82k', 'ViT-H-14':'laion2b_s32b_b79k'}
         context_dim = {'ViT-L-14':768, 'ViT-H-14':1024}
         
-        self.vqgan = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained)
+        self.vqgan = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained, checkpoint_path=stage1_checkpoint_path)
         self.vqgan.freeze()
         
         self.text_model = TextEmbedder(arch=config.clip, version=clip_version[config.clip], freeze=True)
