@@ -184,8 +184,9 @@ class Pipeline(nn.Module):
         ids = torch.full((B, self.num_tokens), self.mask_token_id, dtype=torch.long, device=self.mask_token.device)
         for step in tqdm(range(timesteps)):
             progress = (step + 1) / timesteps
-            mask_ratio = mask_schedule(progress)
-            ids, img = self.sample(ids, mask_ratio=mask_ratio, text=text, topk=topk, temperature=temperature)
+            masked_r = mask_schedule(progress)
+            cur_temp = temperature * (1 - step / timesteps)
+            ids, img = self.sample(ids, mask_ratio=masked_r, text=text, topk=topk, temperature=cur_temp)
             if step % save_interval == 0:
                 imgs.append(img.cpu())
         
@@ -204,8 +205,9 @@ class Pipeline(nn.Module):
         ids = ids * mask + self.mask_token_id * (1 - mask)
         for step in tqdm(range(timesteps)):
             progress = (step + 1) / timesteps
-            mask_ratio = mask_schedule(progress)
-            ids, img = self.sample(ids, mask_ratio=mask_ratio, text=text, topk=topk, temperature=temperature)
+            masked_r = mask_schedule(progress)
+            cur_temp = temperature * (1 - step / timesteps)
+            ids, img = self.sample(ids, mask_ratio=masked_r, text=text, topk=topk, temperature=cur_temp)
             
         return img
     
@@ -222,8 +224,9 @@ class Pipeline(nn.Module):
         ids = ids * mask + self.mask_token_id * (1 - mask)
         for step in tqdm(range(timesteps)):
             progress = (step + 1) / timesteps
-            mask_ratio = mask_schedule(progress)
-            ids, img = self.sample(ids, mask_ratio=mask_ratio, text=text, topk=topk, temperature=temperature)
+            masked_r = mask_schedule(progress)
+            cur_temp = temperature * (1 - step / timesteps)
+            ids, img = self.sample(ids, mask_ratio=masked_r, text=text, topk=topk, temperature=cur_temp)
             
         return img
             
