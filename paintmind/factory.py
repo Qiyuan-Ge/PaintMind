@@ -3,13 +3,13 @@ from .stage1 import VQModel
 from .generate import Pipeline
 from huggingface_hub import hf_hub_download
 
-def create_model(arch='pipeline', version='pipeline-v1', pretrained=True, checkpoint_path=None):
+def create_model(arch='pipeline', version='paintmindv1', pretrained=True, checkpoint_path=None):
     config = Config(ver2cfg[version])
     
     if arch == 'vqgan':
         model = VQModel(config)
     elif arch == 'pipeline':
-        model = Pipeline(config)
+        model = Pipeline(config, stage1_pretrained=False)
     else:
         raise ValueError(f"failed to load arch named {arch}")
         
