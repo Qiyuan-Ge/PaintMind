@@ -58,7 +58,9 @@ class Pipeline(nn.Module):
         self.text_model = TextEmbedder(arch=config.clip, version=clip_version[config.clip], freeze=True)
         
         vq_cfg = ver2cfg[config.stage1]
-        self.num_tokens = (vq_cfg['enc']['image_size'] // vq_cfg['enc']['patch_size']) ** 2
+        self.image_size = vq_cfg['enc']['image_size']
+        self.patch_size = vq_cfg['enc']['patch_size']
+        self.num_tokens = (self.image_size // self.patch_size) ** 2
         
         self.transformer = CondTransformer(
             vq_cfg['embed_dim'], config.dim, self.num_tokens, config.dim_head, config.mlp_dim, 
@@ -126,18 +128,18 @@ class Pipeline(nn.Module):
         
         return x, indices, text
     
-    def token_to_logits(self, token, text=None):
+    def tokens2logits(self, token, text=None):
         return self.transformer(token, text)
     
     def forward(self, img, text=None, mask_ratio=0.75):
         # stage1
-        x, indices, text = self.to_latent(img, text)   
+        x, ids, text = self.to_latent(img, text)   
         # random mask
         x, mask = self.random_masking(x, mask_ratio)
         # stage2
-        logits = self.token_to_logits(x, text)
+        logits = self.tokens2logits(x, text)
         # loss
-        loss = self.loss(logits, indices, mask)
+        loss = self.loss(logits, ids, mask)
 
         return loss
     
@@ -152,7 +154,7 @@ class Pipeline(nn.Module):
     @torch.no_grad()
     def sample(self, ids, mask_ratio, text=None, topk=1, temperature=1):
         tokens = self.ids2tokens(ids)
-        logits = self.token_to_logits(tokens, text)
+        logits = self.tokens2logits(tokens, text)
         filtered_logits = top_k(logits, topk)
         pred_ids = gumbel_sample(filtered_logits, temperature=temperature, dim=-1)
         is_mask = ids == self.mask_token_id
@@ -197,6 +199,24 @@ class Pipeline(nn.Module):
         x, y, h, w = loc[0]//s, loc[1]//s, loc[2]//s, loc[3]//s
         mask = torch.ones(self.image_size//s, self.image_size//s).unsqueeze(0).to(z.device)
         mask[:, y:y+h, x:x+w] = 0
+        mask = mask.reshape(1, -1)
+        
+        ids = ids * mask + self.mask_token_id * (1 - mask)
+        for step in tqdm(range(timesteps)):
+            progress = (step + 1) / timesteps
+            mask_ratio = mask_schedule(progress)
+            ids, img = self.sample(ids, mask_ratio=mask_ratio, text=text, topk=topk, temperature=temperature)
+            
+        return img
+    
+    @torch.no_grad()
+    def outpaint(self, img, loc, text=None, timesteps=1, topk=1, temperature=0):
+        z, ids, text = self.to_latent(img, text)
+        
+        s = self.patch_size
+        x, y, h, w = loc[0]//s, loc[1]//s, loc[2]//s, loc[3]//s
+        mask = torch.zeros(self.image_size//s, self.image_size//s).unsqueeze(0).to(z.device)
+        mask[:, y:y+h, x:x+w] = 1
         mask = mask.reshape(1, -1)
         
         ids = ids * mask + self.mask_token_id * (1 - mask)
