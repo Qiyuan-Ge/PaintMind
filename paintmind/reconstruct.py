@@ -10,7 +10,7 @@ def exists(x):
 
 def restore(x):
     x = (x + 1) * 0.5
-    x = x.permute(1,2,0).detach().numpy()
+    x = x.permute(1,2,0).detach().cpu().numpy()
     x = (255*x).astype(np.uint8)
     x = Image.fromarray(x)
     return x
