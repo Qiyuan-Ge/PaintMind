@@ -20,7 +20,7 @@ def create_model(arch='pipeline', version='pipeline-v1', pretrained=True, checkp
         
     return model
         
-def create_pipeline_for_train(version='pipeline-v1', stage1_pretrained=True):
-    model = Pipeline(Config(ver2cfg[version]), stage1_pretrained=stage1_pretrained)
+def create_pipeline_for_train(version='pipeline-v1', stage1_pretrained=True, stage1_checkpoint_path=None):
+    model = Pipeline(Config(ver2cfg[version]), stage1_pretrained=stage1_pretrained, stage1_checkpoint_path=stage1_checkpoint_path)
     
     return model
