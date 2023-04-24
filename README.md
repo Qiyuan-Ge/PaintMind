@@ -15,7 +15,7 @@ Note: Hi, I am preparing for a new release with better vitvqgan and generate mod
 from old version will not be available.
 ````
 
-Inspire from MaskGIT: Masked Generative Image Transformer and Muse: Text-To-Image Generation via Masked Generative Transformers
+Inspire from **MaskGIT: Masked Generative Image Transformer** and **Muse: Text-To-Image Generation via Masked Generative Transformers**
 
 ## Features
 - [x] **xformers** support, accelerate both for training and inference
