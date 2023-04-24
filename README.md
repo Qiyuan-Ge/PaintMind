@@ -142,7 +142,7 @@ pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman
 Not finish yet, but the code is ready.
 
 <div align=center>
-<img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/stage2_test.png">
+<img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/stage2_test.png" width="768px">
 </div>
 
 ### Training
