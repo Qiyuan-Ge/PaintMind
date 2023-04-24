@@ -15,17 +15,31 @@ Note: Hi, I am preparing for a new release with better vitvqgan and generate mod
 from old version will not be available.
 ````
 
-## Install
+## Features
+- [x] **xformers** support, accelerate both for training and inference
+- [x] **accelerate** support, for mixed precision and multi-gpu training
+
+## To Do
+- [x] test end-to-end, stage1 vqtokenizer and stage2 text-to-image
+- [ ] final test and release the stable version V1
+
+## Installation
+For the **latest** version:
 ````
 pip install git+https://github.com/Qiyuan-Ge/PaintMind.git
 ````
-
+**Recommended** installation:  
+- xformers can accelerate both for training and inference
+- requires PyTorch 2.0.0 on **Windows** or PyTorch 1.12.1, 1.13.1 or 2.0.0 on **Linux**
+````
+pip install -U xformers
+````
 ## Import
 ````
 import paintmind as pm
 ````
 
-## Reconstruction
+## Stage1: Reconstruction
 Play with [Colab Notebook](https://colab.research.google.com/drive/1J8M97_HDAVXWQB4qp6yIBI7nPs-ZGXQz?usp=sharing).
 ### Usage
 if you set 'pretrained=True', the code will then try to downlaod the pretrained weights.
@@ -124,8 +138,13 @@ pm.reconstruction(img_path='https://cdn.pixabay.com/photo/2017/10/28/07/47/woman
 <img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/rec_5.png?raw=true">
 </div>
 
-## Text2Image
-Not finish yet~~
+## Stage2: Text2Image
+Not finish yet, but the code is ready.
+
+<div align=center>
+<img src="https://github.com/Qiyuan-Ge/PaintMind/blob/main/assets/stage2_test.png">
+</div>
+
 ### Training
 ````
 import paintmind as pm
