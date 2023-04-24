@@ -54,7 +54,8 @@ from paintmind.utils import datasets
 
 data_path = 'your/data/path'
 transform = pm.stage1_transform(img_size=256, is_train=True, scale=0.66)
-dataset = datasets.ImageNet(root=data_path, transform=transform) # or your own dataset
+dataset = datasets.ImageNet(root=data_path, transform=transform)
+# or your own dataset, the output format should be image: torch.Tensor or (image: torch.Tensor, _)
 
 model = pm.create_model(arch='vqgan', version='vit-s-vqgan', pretrained=False)
 
@@ -132,7 +133,8 @@ from paintmind.utils import datasets
 
 data_path = 'your/data/path'
 transform = pm.stage2_transform(img_size=256, is_train=True, scale=0.8)
-dataset = datasets.CoCo(root=data_path, transform=transform) # or your own dataset, the output format should be (image, caption)
+dataset = datasets.CoCo(root=data_path, transform=transform) 
+# or your own dataset, the output format should be (image: torch.Tensor, caption: str)
 
 # load pretrained weights I upload to huggingface, not finish yet
 model = pm.create_pipeline_for_train(version='paintmindv1', stage1_pretrained=True)
