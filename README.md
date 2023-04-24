@@ -27,7 +27,7 @@ The code is still under testing, feel free to improve and test the code and add 
 - [ ] final test and release the stable version V1
 
 ## Installation
-For the **latest** version:
+To install the **latest** version:
 ````
 pip install git+https://github.com/Qiyuan-Ge/PaintMind.git
 ````
