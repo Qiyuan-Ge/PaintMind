@@ -193,11 +193,11 @@ class Pipeline(nn.Module):
         return imgs
     
     @torch.no_grad()
-    def inpaint(self, img, loc, text=None, timesteps=1, topk=1, temperature=0):
+    def inpaint(self, img, coord, text=None, timesteps=1, topk=1, temperature=0):
         z, ids, text = self.to_latent(img, text)
         
         s = self.patch_size
-        x, y, h, w = loc[0]//s, loc[1]//s, loc[2]//s, loc[3]//s
+        x, y, h, w = coord[0]//s, coord[1]//s, coord[2]//s, coord[3]//s
         mask = torch.ones(self.image_size//s, self.image_size//s).unsqueeze(0).to(z.device)
         mask[:, y:y+h, x:x+w] = 0
         mask = mask.reshape(1, -1)
@@ -212,11 +212,11 @@ class Pipeline(nn.Module):
         return img
     
     @torch.no_grad()
-    def outpaint(self, img, loc, text=None, timesteps=1, topk=1, temperature=0):
+    def outpaint(self, img, coord, text=None, timesteps=1, topk=1, temperature=0):
         z, ids, text = self.to_latent(img, text)
         
         s = self.patch_size
-        x, y, h, w = loc[0]//s, loc[1]//s, loc[2]//s, loc[3]//s
+        x, y, h, w = coord[0]//s, coord[1]//s, coord[2]//s, coord[3]//s
         mask = torch.zeros(self.image_size//s, self.image_size//s).unsqueeze(0).to(z.device)
         mask[:, y:y+h, x:x+w] = 1
         mask = mask.reshape(1, -1)
