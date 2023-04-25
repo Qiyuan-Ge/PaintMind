@@ -8,7 +8,6 @@ from PIL import Image
 from datasets import load_dataset
 from pycocotools.coco import COCO
 
-
 def unzip_file(zip_src, tgt_dir):
     if zipfile.is_zipfile(zip_src):
         fz = zipfile.ZipFile(zip_src, 'r')
@@ -16,24 +15,56 @@ def unzip_file(zip_src, tgt_dir):
             fz.extract(file, tgt_dir)       
     else:
         raise RuntimeError("This is not zip file.")
-    
 
-class CoyoAesthetic:
-    def __init__(self, root, transform=None):
-        self.root = root
-        self.df = pd.read_parquet(os.path.join(root, 'coyo_aesthetic.parquet'))
+        
+class Laion:
+    def __init__(self, metadata_path, folder_path, fid='folder', key='key', caption_col='caption', transform=None):
+        self.df = pd.read_parquet(metadata_path)
+        self.fpath = folder_path
+        self.fid = fid
+        self.key = key
+        self.caption_col = caption_col
         self.transform = transform
         
     def __getitem__(self, idx):
-        fid = self.df['folder'][idx]
-        key = self.df['key'][idx]
-        img_path = f"{self.root}/{fid}/{key}.jpg"
+        fid = self.df[self.fid][idx]
+        key = self.df[self.key][idx]
+        img_path = f"{self.fpath}/{fid}/{key}.jpg"
         img = Image.open(img_path).convert('RGB')
+        caption = self.df[self.caption_col][idx]
         
         if self.transform is not None:
             img = self.transform(img)
         
-        caption = self.df['caption'][idx]
+        return img, caption
+    
+    def __len__(self):
+        return len(self.df)        
+
+                 
+class LaionV2:
+    def __init__(self, metadata_path, folder_path, fid='folder', key='key', caption_col=['caption', 'prompt'], p=[0.2, 0.8], transform=None):
+        self.df = pd.read_parquet(metadata_path)
+        self.fpath = folder_path
+        self.fid = fid
+        self.key = key
+        self.caption_col = caption_col
+        self.p = p
+        self.transform = transform
+        
+    def __getitem__(self, idx):
+        fid = self.df[self.fid][idx]
+        key = self.df[self.key][idx]
+        img_path = f"{self.fpath}/{fid}/{key}.jpg"
+        img = Image.open(img_path).convert('RGB')
+        
+        prompts = []
+        for col in self.caption_col:
+            prompts.append(self.df[col][idx])
+        caption = np.random.choice(prompts, p=self.p)
+        
+        if self.transform is not None:
+            img = self.transform(img)
         
         return img, caption
     
