@@ -188,3 +188,11 @@ trainer = pm.PaintMindTrainer(
     )
 trainer.train()
 ````
+
+## Acknowledgments
+- taming-transformers
+- maskgit
+- muse-maskgit-pytorch
+- img2dataset
+- accelerate
+- xformers
