@@ -50,12 +50,10 @@ class CrossAttention(nn.Module):
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
-        sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
-
-        # attention, what we cannot get enough of
+        sim = (q @ k.transpose(-2, -1)) * self.scale
         sim = sim.softmax(dim=-1)
 
-        out = einsum('b i j, b j d -> b i d', sim, v)
+        out = sim @ v
         out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
         return self.to_out(out)    
     
@@ -98,7 +96,6 @@ class MemoryEfficientCrossAttention(nn.Module):
             (q, k, v),
         )
 
-        # actually compute the attention, what we cannot get enough of
         out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None, op=self.attention_op)
 
         out = (
