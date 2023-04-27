@@ -49,8 +49,9 @@ class CrossAttention(nn.Module):
         v = self.to_v(context)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
-
-        sim = (q @ k.transpose(-2, -1)) * self.scale
+        q = q * self.scale
+        
+        sim = q @ k.transpose(-2, -1)
         sim = sim.softmax(dim=-1)
 
         out = sim @ v
