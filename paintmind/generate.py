@@ -70,6 +70,8 @@ class Pipeline(nn.Module):
         self.mask_token = nn.Parameter(torch.zeros(1, vq_cfg['embed_dim']))
         self.mask_token_id = self.num_tokens
         
+        nn.init.normal_(self.mask_token, std=.02)
+        
     def from_pretrained(self, path):
         return self.load_state_dict(torch.load(path))
     
