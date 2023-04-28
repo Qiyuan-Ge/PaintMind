@@ -277,7 +277,7 @@ class VQGANTrainer(nn.Module):
                 imgs_and_recs = rearrange(imgs_and_recs, 'r b ... -> (b r) ...')
                 imgs_and_recs = imgs_and_recs.detach().cpu().float()
                 
-                grid = make_grid(imgs_and_recs, nrow=4, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_recs, nrow=6, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.vqvae.train()
 
@@ -326,7 +326,7 @@ class PaintMindTrainer(nn.Module):
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
         
         self.train_dl = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
-        self.valid_dl = DataLoader(self.valid_ds, batch_size=4, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
+        self.valid_dl = DataLoader(self.valid_ds, batch_size=6, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
         
         self.model = model
         
@@ -431,6 +431,6 @@ class PaintMindTrainer(nn.Module):
                 imgs_and_gens = torch.cat(imgs_and_gens, dim=0)
                 imgs_and_gens = imgs_and_gens.detach().cpu().float()
                 
-                grid = make_grid(imgs_and_gens, nrow=4, normalize=True, value_range=(-1, 1))
+                grid = make_grid(imgs_and_gens, nrow=6, normalize=True, value_range=(-1, 1))
                 save_image(grid, os.path.join(self.image_saved_dir, f'step_{self.steps}_{i}.png'))
         self.model.train()
