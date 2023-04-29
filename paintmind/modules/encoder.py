@@ -16,7 +16,7 @@ CLIP_VERSION = 'laion2b_s32b_b82k'
 
 
 class T5TextEmbedder(nn.Module):
-    def __init__(self, version="google/flan-t5-base", device="cuda", max_length=77, freeze=True):  
+    def __init__(self, version="google/flan-t5-xl", device="cuda", max_length=77, freeze=True):  
         super().__init__()
         self.tokenizer = T5Tokenizer.from_pretrained(version)
         self.transformer = T5EncoderModel.from_pretrained(version)
