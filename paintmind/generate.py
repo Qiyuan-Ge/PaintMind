@@ -9,7 +9,7 @@ from einops import rearrange
 from inspect import isfunction
 from paintmind.config import ver2cfg
 from paintmind.stage2 import CondTransformer
-from paintmind.modules.encoder import CLIPTextEmbedder as TextEmbedder
+from paintmind.modules.encoder import T5TextEmbedder as TextEmbedder
 
 
 def exists(x):
@@ -49,13 +49,13 @@ def gumbel_sample(t, temperature=1., dim=-1):
 class Pipeline(nn.Module):
     def __init__(self, config, stage1_pretrained=True, stage1_checkpoint_path=None):
         super().__init__()
-        clip_version = {'ViT-L-14':'laion2b_s32b_b82k', 'ViT-H-14':'laion2b_s32b_b79k'}
-        context_dim = {'ViT-L-14':768, 'ViT-H-14':1024}
+        t5_version = {'t5-l':'google/flan-t5-large', 't5-xl':'google/flan-t5-xl', 't5-xxl':'google/flan-t5-xxl'}
+        t5_txt_dim = 1024
         
         self.vqgan = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained, checkpoint_path=stage1_checkpoint_path)
         self.vqgan.freeze()
         
-        self.text_model = TextEmbedder(arch=config.clip, version=clip_version[config.clip], freeze=True)
+        self.text_model = TextEmbedder(version=t5_version[config.t5], freeze=True)
         
         vq_cfg = ver2cfg[config.stage1]
         self.image_size = vq_cfg['enc']['image_size']
@@ -64,7 +64,7 @@ class Pipeline(nn.Module):
         
         self.transformer = CondTransformer(
             vq_cfg['embed_dim'], config.dim, self.num_tokens, config.dim_head, config.mlp_dim, 
-            config.num_head, config.depth, config.dropout, context_dim[config.clip], vq_cfg['n_embed'],
+            config.num_head, config.depth, config.dropout, t5_txt_dim, vq_cfg['n_embed'],
         )
         
         self.mask_token = nn.Parameter(torch.zeros(1, vq_cfg['embed_dim']))
