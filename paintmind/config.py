@@ -67,7 +67,7 @@ vit_s_vqgan_config = {
 
 pipeline_v1_config = {
     'stage1'         :'vit-s-vqgan',
-    'clip'           :'ViT-H-14',
+    't5'             :'t5-xl',
     'dim'            :1024, 
     'dim_head'       :64,
     'mlp_dim'        :4096,
