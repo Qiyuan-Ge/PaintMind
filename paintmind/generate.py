@@ -50,7 +50,7 @@ class Pipeline(nn.Module):
     def __init__(self, config, stage1_pretrained=True, stage1_checkpoint_path=None):
         super().__init__()
         t5_version = {'t5-l':'google/flan-t5-large', 't5-xl':'google/flan-t5-xl', 't5-xxl':'google/flan-t5-xxl'}
-        t5_txt_dim = 1024
+        t5_txt_dim = {'t5-l':1024, 't5-xl':2048}
         
         self.vqgan = pm.create_model(arch='vqgan', version=config.stage1, pretrained=stage1_pretrained, checkpoint_path=stage1_checkpoint_path)
         self.vqgan.freeze()
@@ -64,7 +64,7 @@ class Pipeline(nn.Module):
         
         self.transformer = CondTransformer(
             vq_cfg['embed_dim'], config.dim, self.num_tokens, config.dim_head, config.mlp_dim, 
-            config.num_head, config.depth, config.dropout, t5_txt_dim, vq_cfg['n_embed'],
+            config.num_head, config.depth, config.dropout, t5_txt_dim[config.t5], vq_cfg['n_embed'],
         )
         
         self.mask_token = nn.Parameter(torch.zeros(1, vq_cfg['embed_dim']))
