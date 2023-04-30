@@ -91,7 +91,7 @@ class VQGANTrainer(nn.Module):
 
         self.vqvae = vqvae
         
-        self.discr = NLayerDiscriminator(input_nc=3, ndf=64, n_layers=3).to(self.device)
+        self.discr = NLayerDiscriminator(input_nc=3, ndf=64, n_layers=3)
         
         train_size = len(dataset) - valid_size
         self.train_ds, self.valid_ds = random_split(dataset, [train_size, valid_size], generator=torch.Generator().manual_seed(42))
