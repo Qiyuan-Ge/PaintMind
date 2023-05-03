@@ -69,7 +69,7 @@ class VQGANTrainer(nn.Module):
         lr_min=5e-5, 
         warmup_steps=50000, 
         warmup_lr_init=1e-6,
-        decay_steps=100000,
+        decay_steps=None,
         batch_size=32,
         num_workers=0,
         pin_memory=False,
@@ -240,6 +240,7 @@ class VQGANTrainer(nn.Module):
                             "perceptual loss"     : self.log['per loss'],
                             "g_loss"              : self.log['g loss'],
                             "d_loss"              : self.log['d loss'],
+                            "g_lr"                : self.log['g lr'],
                         }
                     )
                     self.accelerator.log(
