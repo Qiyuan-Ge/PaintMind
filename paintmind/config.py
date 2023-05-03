@@ -45,7 +45,7 @@ vit_s_vqgan_config = {
         'image_size':256, 
         'patch_size':8, 
         'dim':512, 
-        'depth':10, 
+        'depth':8, 
         'num_head':8, 
         'mlp_dim':2048, 
         'in_channels':3, 
@@ -56,7 +56,7 @@ vit_s_vqgan_config = {
         'image_size':256, 
         'patch_size':8, 
         'dim':512, 
-        'depth':10, 
+        'depth':8, 
         'num_head':8, 
         'mlp_dim':2048, 
         'out_channels':3, 
@@ -67,12 +67,12 @@ vit_s_vqgan_config = {
 
 pipeline_v1_config = {
     'stage1'         :'vit-s-vqgan',
-    't5'             :'t5-xl',
+    't5'             :'t5-l',
     'dim'            :1024, 
     'dim_head'       :64,
     'mlp_dim'        :4096,
     'num_head'       :16, 
-    'depth'          :20,
+    'depth'          :12,
     'dropout'        :0.1, 
 }
 
