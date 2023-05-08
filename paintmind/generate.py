@@ -68,7 +68,7 @@ class Pipeline(nn.Module):
         )
         
         self.mask_token = nn.Parameter(torch.zeros(1, vq_cfg['embed_dim']))
-        self.mask_token_id = self.num_tokens
+        self.mask_token_id = vq_cfg['n_embed']
         
         nn.init.normal_(self.mask_token, std=.02)
         
