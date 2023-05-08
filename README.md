@@ -10,6 +10,8 @@
 </div>
 
 ````
+- 2023/5/8
+Release the new vit-s-vqgan.
 - 2023/4/19  
 Note: Hi, I am preparing for a new release with better vitvqgan and generate model, pretrained weights 
 from old version will not be available.
