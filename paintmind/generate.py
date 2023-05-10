@@ -159,11 +159,11 @@ class Pipeline(nn.Module):
         logits = self.tokens2logits(tokens, text)
         filtered_logits = top_k(logits, topk)
         pred_ids = gumbel_sample(filtered_logits, temperature=temperature, dim=-1)
+        img = self.vqgan.decode_from_indice(pred_ids)
         is_mask = ids == self.mask_token_id
         # Fill the mask, ignore the unmasked.
         ids = torch.where(is_mask, pred_ids, ids)
-        img = self.vqgan.decode_from_indice(ids)
-        
+       
         probs = logits.softmax(dim=-1)
         scores = 1 - probs.gather(2, pred_ids[..., None])
         scores = rearrange(scores, '... 1 -> ...')
