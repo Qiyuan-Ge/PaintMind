@@ -147,8 +147,11 @@ class Pipeline(nn.Module):
     
     @torch.no_grad()
     def ids2tokens(self, ids):
-        cat = torch.cat((self.vqgan.quantize.embedding.weight, self.mask_token))
-        emb = nn.Embedding(self.num_tokens, self.mask_token.shape[-1]).from_pretrained(cat)
+        w_embed = self.vqgan.quantize.embedding.weight.data
+        n_embed, d_embed = w_embed.shape
+        cat = torch.cat((w_embed, self.mask_token.data))
+        emb = nn.Embedding(n_embed+1, d_embed)
+        emb.weight.data = cat
         tokens = emb(ids)
         
         return tokens
