@@ -50,7 +50,7 @@ class Layer(nn.Module):
     
 
 class CondTransformer(nn.Module):
-    def __init__(self, in_dim, dim, len_seq, dim_head, mlp_dim, num_head=8, depth=6, dropout=0.1, context_dim=None, num_calsses=8192):
+    def __init__(self, in_dim, dim, len_seq, dim_head, mlp_dim, num_head=8, depth=6, dropout=0.1, context_dim=None, num_classes=8192):
         super().__init__()
         scale = dim ** -0.5
         self.token_proj = nn.Linear(in_dim, dim)
@@ -60,7 +60,7 @@ class CondTransformer(nn.Module):
         for i in range(depth):
             self.layers.add_module("layer" + str(i), Layer(dim, dim_head, mlp_dim, num_head, dropout, dim))
         self.norm = nn.LayerNorm(dim)
-        self.to_logits = nn.Linear(dim, num_calsses)
+        self.to_logits = nn.Linear(dim, num_classes)
         
         self.initialize_weights()
 
