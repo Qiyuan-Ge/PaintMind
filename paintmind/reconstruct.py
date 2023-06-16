@@ -20,9 +20,8 @@ def download_image(url):
     resp.raise_for_status()
     return Image.open(io.BytesIO(resp.content))
 
-def reconstruction(img_path=None, model_name='vit-s-vqgan', titles=['origin', 'reconstruct'], checkpoint_path=None, scale=0.8):
+def reconstruction(img_path=None, model_name='vit-s-vqgan', titles=['origin', 'reconstruct'], checkpoint_path=None, scale=0.8, device='cuda'):
     w, h = 256, 256
-    device = torch.device('cuda')
     
     if img_path.startswith('http'):
         img = download_image(img_path)
@@ -30,11 +29,11 @@ def reconstruction(img_path=None, model_name='vit-s-vqgan', titles=['origin', 'r
         img = Image.open(img_path).convert('RGB')
     
     img = pm.stage1_transform(is_train=False, scale=scale)(img)    
+    img = img.to(device)
     model = pm.create_model(arch='vqgan', version=model_name, pretrained=True, checkpoint_path=checkpoint_path)
     model = model.to(device)
     model.eval()
     with torch.no_grad():
-        img = img.to(device)
         z, _, _ = model.encode(img.unsqueeze(0))
         rec = model.decode(z).squeeze(0)
     img = restore(img)
